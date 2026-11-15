@@ -53,11 +53,11 @@ export default function SetupPanel() {
             Gemini AI
           </button>
           <button className={settings.brain === 'test' ? 'on' : ''} onClick={() => setSettings({ brain: 'test' })}>
-            Test mode
+            No AI
           </button>
         </div>
         {settings.brain === 'test' ? (
-          <p className="muted">Canned lines and random decisions. No key, no cost.</p>
+          <p className="muted">Each fruit decides from its personality sliders and what it has seen, and speaks from stock lines. No key, no cost.</p>
         ) : (
           <>
             <label>

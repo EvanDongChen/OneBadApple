@@ -334,7 +334,7 @@ async function run(signal: AbortSignal) {
   })
   log({
     kind: 'system',
-    text: `${fruits.length} fruits, ${wolves.length} werewolf${wolves.length > 1 ? 'es' : ''} among them. Brain: ${useGemini ? `Gemini (${s.settings.model})` : 'test mode (canned)'}.`,
+    text: `${fruits.length} fruits, ${wolves.length} werewolf${wolves.length > 1 ? 'es' : ''} among them. Brain: ${useGemini ? `Gemini (${s.settings.model})` : 'no AI (personality rules)'}.`,
   })
 
   for (let day = 1; ; day++) {
