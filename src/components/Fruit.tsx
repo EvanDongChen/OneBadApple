@@ -232,7 +232,9 @@ export default function Fruit({ id }: { id: string }) {
     v.want.set(goalX - t.x, 0, goalZ - t.z)
     const distance = v.want.length()
     const walking = distance > (followPos ? FOLLOW_DISTANCE : ARRIVE_DISTANCE)
-    if (walking) v.want.multiplyScalar(WALK_SPEED / distance)
+    // The attacking wolf moves at double speed, both on the way there and on the way home.
+    const speed = WALK_SPEED * (sim.attack?.attackerId === id ? 2 : 1)
+    if (walking) v.want.multiplyScalar(speed / distance)
     else v.want.set(0, 0, 0)
 
     // Keep the middle of the meeting circle clear: pushed outward, and steered around it when walking past.

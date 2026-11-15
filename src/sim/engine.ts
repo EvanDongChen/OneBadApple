@@ -204,9 +204,12 @@ async function night(brain: Brain, signal: AbortSignal) {
   const saved = script.protect === victim.id
   if (!saved) kill(victim.id)
   await wait(1400, signal)
-  set({ attack: null })
+  // Day only breaks once the wolf has hurried back to its own spot.
+  set((s) => ({ attack: s.attack && { ...s.attack, striking: false } }))
   sendTo((f) => f.home)
-  await wait(1800, signal)
+  await until(() => arrived([hunter.id]), 10000, signal)
+  set({ attack: null })
+  await wait(700, signal)
 
   setPhase('dawn')
   dawnChime()
