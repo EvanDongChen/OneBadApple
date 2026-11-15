@@ -120,6 +120,8 @@ export interface SimState {
   follow: Record<string, string | undefined>
   speech: Record<string, string | undefined>
   thinking: Record<string, boolean | undefined>
+  /** The night attack in progress: the wolf carries a knife, and lunges when `striking`. */
+  attack: { attackerId: string; victimId: string; striking: boolean } | null
   /** Who everyone turns to look at. */
   focusId: string | null
   votes: Record<string, string>
@@ -155,6 +157,7 @@ function setupState(roster: FruitDef[]) {
     speech: {},
     thinking: {},
     focusId: null,
+    attack: null,
     votes: {},
     paused: false,
   }

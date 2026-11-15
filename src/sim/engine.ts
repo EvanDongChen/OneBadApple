@@ -1,6 +1,6 @@
 import { buildPersona, GeminiBrain } from './geminiBrain'
 import { MockBrain } from './mockBrain'
-import { babble, dawnChime, nightChime, thud, voteTick } from './sfx'
+import { babble, dawnChime, nightChime, slice, thud, voteTick } from './sfx'
 import { fruitPositions, layout, useSim } from './store'
 import type { Brain, DayScript, FruitState, LogEntry, NightScript, Phase, Role, WorldView } from './types'
 
@@ -194,13 +194,17 @@ async function night(brain: Brain, signal: AbortSignal) {
     )
   }
 
-  // Act it out: the wolf creeps over to its victim.
-  set((s) => ({ follow: { ...s.follow, [hunter.id]: victim.id } }))
+  // Act it out: the wolf creeps over with a knife, lunges, and the victim is chopped.
+  set((s) => ({ follow: { ...s.follow, [hunter.id]: victim.id }, attack: { attackerId: hunter.id, victimId: victim.id, striking: false } }))
   await until(() => near(hunter.id, victim.id, 2), 9000, signal)
-  await wait(500, signal)
+  await wait(600, signal)
+  set((s) => ({ attack: s.attack && { ...s.attack, striking: true } }))
+  slice()
+  await wait(280, signal)
   const saved = script.protect === victim.id
   if (!saved) kill(victim.id)
-  await wait(1200, signal)
+  await wait(1400, signal)
+  set({ attack: null })
   sendTo((f) => f.home)
   await wait(1800, signal)
 
@@ -333,6 +337,7 @@ async function run(signal: AbortSignal) {
     thinking: {},
     follow: {},
     focusId: null,
+    attack: null,
     calls: 0,
     paused: false,
     revealRoles: false,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
+import { BallCollider, CylinderCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
 import { fruitPositions, useSim } from '../sim/store'
@@ -50,6 +50,11 @@ const ARM_DRAG = 0.94
 const ARM_GRAVITY = 12
 const LIMB_COLOR = '#151515'
 
+// A chopped fruit falls apart into these horizontal slices. Angles are measured
+// down from the top of the sphere, in radians; the face rides on the third slice.
+const SLICE_CUTS = [0, 0.96, 1.36, 1.95, Math.PI]
+const FACE_SLICE = 2
+
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
 const limbDir = new Vector3()
@@ -91,6 +96,11 @@ export default function Fruit({ id }: { id: string }) {
   const thinking = useSim((s) => s.thinking[id])
   const showRole = useSim((s) => s.screen === 'game' && (s.revealRoles || !s.fruits.find((f) => f.id === id)?.alive))
   const whispering = useSim((s) => s.phase === 'mingle')
+  const armed = useSim((s) => s.attack?.attackerId === id)
+  const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
+  // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
+  const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
+  const knife = useRef<Group>(null)
   const { alive, kind } = fruit
   const look = LOOKS[kind]
 
@@ -148,24 +158,43 @@ export default function Fruit({ id }: { id: string }) {
     b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.5, y: 0, z: (Math.random() - 0.5) * m * 0.5 }, true)
   }, [speechText, alive])
 
-  // Death: all balance is switched off and the fruit is flung into a ragdoll tumble.
-  // Getting voted out launches it away from the fire; a night kill just bowls it over.
+  // The wolf lunges at its victim when it strikes.
+  useEffect(() => {
+    const b = body.current
+    const victimId = useSim.getState().attack?.victimId
+    const victim = victimId ? fruitPositions.get(victimId) : undefined
+    if (!striking || !b || !victim) return
+    const t = b.translation()
+    const d = Math.hypot(victim.x - t.x, victim.z - t.z) || 1
+    const m = b.mass()
+    b.applyImpulse({ x: ((victim.x - t.x) / d) * m * 4, y: m * 3, z: ((victim.z - t.z) / d) * m * 4 }, true)
+  }, [striking])
+
+  // Death. Voted out: balance is switched off and the fruit is flung away as a ragdoll.
+  // Killed at night: the body is swapped for a stack of slices that fall apart.
   useEffect(() => {
     const b = body.current
     if (!b) return
     if (alive) {
+      b.setEnabled(true)
       b.setLinearDamping(0.1)
       b.setAngularDamping(0.2)
+      setChop(null)
+      return
+    }
+    if (useSim.getState().phase !== 'vote') {
+      const p = b.translation()
+      const q = b.rotation()
+      setChop({ position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w] })
+      b.setEnabled(false)
       return
     }
     b.setLinearDamping(0.6)
     b.setAngularDamping(1.2)
     const m = b.mass()
     const t = b.translation()
-    const voted = useSim.getState().phase === 'vote'
     const out = Math.hypot(t.x, t.z) || 1
-    const push = voted ? 7 : 1.5
-    b.applyImpulse({ x: (t.x / out) * m * push, y: m * (voted ? 10 : 5), z: (t.z / out) * m * push }, true)
+    b.applyImpulse({ x: (t.x / out) * m * 7, y: m * 10, z: (t.z / out) * m * 7 }, true)
     b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 3, y: (Math.random() - 0.5) * m, z: (Math.random() - 0.5) * m * 3 }, true)
   }, [alive])
 
@@ -313,6 +342,12 @@ export default function Fruit({ id }: { id: string }) {
         point.pos.add(v.tmp)
         point.pos.y -= ARM_GRAVITY * dt * dt
       }
+      // The knife arm is held up and forward instead of dangling.
+      if (armed && i === 1) {
+        v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
+        arm[0].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, 0.26).addScaledVector(UP, 0.05), 0.5)
+        arm[1].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, striking ? 0.6 : 0.4).addScaledVector(UP, striking ? 0.05 : 0.5), 0.5)
+      }
       for (let pass = 0; pass < 3; pass++) {
         arm.forEach((point, n) => {
           const anchor = n === 0 ? v.shoulder : arm[0].pos
@@ -328,6 +363,16 @@ export default function Fruit({ id }: { id: string }) {
       placeLimb(armMeshes.current[i * 2], v.shoulder, arm[0].pos)
       placeLimb(armMeshes.current[i * 2 + 1], arm[0].pos, arm[1].pos)
     })
+
+    // Knife sits in the right hand, blade up (tipped forward on the strike).
+    if (knife.current) {
+      knife.current.visible = armed
+      if (armed) {
+        v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
+        knife.current.position.copy(arms.current[1][1].pos)
+        knife.current.quaternion.setFromUnitVectors(UP, v.tmp.copy(UP).multiplyScalar(striking ? 0.2 : 1).addScaledVector(v.fwd, striking ? 1 : 0.35).normalize())
+      }
+    }
 
     // Legs. Alive: procedural stepping, a foot stays planted until the body drifts away
     // from it. Dead: the legs just stick out limply from the body.
@@ -370,7 +415,7 @@ export default function Fruit({ id }: { id: string }) {
     <>
       <RigidBody ref={body} colliders={false} position={spawn} linearDamping={0.1} angularDamping={0.2}>
         <BallCollider args={[RADIUS]} friction={0.6} restitution={0.4} />
-        <group ref={visual}>
+        <group ref={visual} visible={!chop}>
           <mesh castShadow scale={look.scale}>
             <sphereGeometry args={[RADIUS, 32, 24]} />
             <meshStandardMaterial color={look.color} roughness={0.45} />
@@ -424,6 +469,24 @@ export default function Fruit({ id }: { id: string }) {
         </group>
       </RigidBody>
 
+      {chop && <Slices look={look} position={chop.position} quaternion={chop.quaternion} />}
+
+      <group ref={knife} visible={false} scale={1.7}>
+        <mesh castShadow position={[0, 0.02, 0]}>
+          <boxGeometry args={[0.06, 0.16, 0.06]} />
+          <meshStandardMaterial color="#5a3a1c" />
+        </mesh>
+        <mesh castShadow position={[0, 0.11, 0]}>
+          <boxGeometry args={[0.04, 0.03, 0.16]} />
+          <meshStandardMaterial color="#3a3a3a" />
+        </mesh>
+        <mesh castShadow position={[0, 0.32, 0.01]}>
+          <boxGeometry args={[0.02, 0.4, 0.11]} />
+          <meshStandardMaterial color="#eef2f5" emissive="#aeb8c2" emissiveIntensity={0.7} roughness={0.3} />
+        </mesh>
+      </group>
+
+      <group visible={!chop}>
       {[0, 1].map((i) => (
         <group key={i}>
           <mesh ref={(m) => void (legMeshes.current[i] = m)} castShadow>
@@ -444,6 +507,8 @@ export default function Fruit({ id }: { id: string }) {
         </mesh>
       ))}
 
+      </group>
+
       <group ref={overlay}>
         <Html center zIndexRange={[10, 0]}>
           <div className={`fruit-tag${alive ? '' : ' dead'}`}>
@@ -456,6 +521,98 @@ export default function Fruit({ id }: { id: string }) {
           </div>
         </Html>
       </group>
+    </>
+  )
+}
+
+/**
+ * A chopped fruit: horizontal slices, each its own rigid body, with skin on the
+ * outside and pale flesh on the cut faces. They start stacked where the whole
+ * fruit stood and are nudged apart so they topple onto the ground.
+ */
+function Slices({
+  look,
+  position,
+  quaternion,
+}: {
+  look: (typeof LOOKS)[keyof typeof LOOKS]
+  position: [number, number, number]
+  quaternion: [number, number, number, number]
+}) {
+  // Random shove per slice, fixed for the life of the pieces.
+  const kicks = useMemo(
+    () =>
+      SLICE_CUTS.slice(1).map(() => ({
+        linear: [(Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3] as [number, number, number],
+        angular: [(Math.random() - 0.5) * 6, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 6] as [number, number, number],
+      })),
+    [],
+  )
+
+  return (
+    <>
+      {kicks.map((kick, i) => {
+        const from = SLICE_CUTS[i]
+        const to = SLICE_CUTS[i + 1]
+        const top = RADIUS * Math.cos(from)
+        const bottom = RADIUS * Math.cos(to)
+        // Widest point of this slice: the equator if the slice spans it.
+        const widest = RADIUS * (from < Math.PI / 2 && to > Math.PI / 2 ? 1 : Math.max(Math.sin(from), Math.sin(to)))
+        return (
+          <RigidBody
+            key={i}
+            colliders={false}
+            position={position}
+            quaternion={quaternion}
+            linearVelocity={kick.linear}
+            angularVelocity={kick.angular}
+            linearDamping={0.3}
+            angularDamping={0.8}
+          >
+            <CylinderCollider args={[((top - bottom) / 2) * look.scale[1], widest * 0.92]} position={[0, ((top + bottom) / 2) * look.scale[1], 0]} friction={0.9} restitution={0.2} />
+            <group scale={look.scale}>
+              <mesh castShadow>
+                <sphereGeometry args={[RADIUS, 28, 6, 0, Math.PI * 2, from, to - from]} />
+                <meshStandardMaterial color={look.color} roughness={0.45} />
+              </mesh>
+              {from > 0 && (
+                <mesh position={[0, top, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                  <circleGeometry args={[RADIUS * Math.sin(from), 28]} />
+                  <meshStandardMaterial color={look.flesh} roughness={0.6} />
+                </mesh>
+              )}
+              {to < Math.PI && (
+                <mesh position={[0, bottom, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                  <circleGeometry args={[RADIUS * Math.sin(to), 28]} />
+                  <meshStandardMaterial color={look.flesh} roughness={0.6} />
+                </mesh>
+              )}
+              {i === 0 && (
+                <mesh castShadow position={[0, RADIUS + 0.06, 0]} rotation={[0, 0, 0.25]}>
+                  <cylinderGeometry args={[0.025, 0.035, 0.2, 6]} />
+                  <meshStandardMaterial color="#5a3a1c" />
+                </mesh>
+              )}
+              {/* The dead face, crosses for eyes, stays on its slice. */}
+              {i === FACE_SLICE &&
+                [-1, 1].map((side) =>
+                  [1, -1].map((tilt) => (
+                    <mesh key={`${side}${tilt}`} position={[side * EYE_SPREAD, 0.05, RADIUS]} rotation={[0, 0, (tilt * Math.PI) / 4]}>
+                      <planeGeometry args={[0.1, 0.02]} />
+                      <meshBasicMaterial color={LIMB_COLOR} />
+                    </mesh>
+                  )),
+                )}
+              {i === FACE_SLICE && (
+                <mesh position={[0, -0.08, RADIUS * 0.99]}>
+                  <planeGeometry args={[0.13, 0.022]} />
+                  <meshBasicMaterial color={LIMB_COLOR} />
+                </mesh>
+              )}
+            </group>
+          </RigidBody>
+        )
+      })}
     </>
   )
 }

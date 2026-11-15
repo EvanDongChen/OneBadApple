@@ -37,6 +37,12 @@ export function babble(voice: number, durationMs: number) {
   }
 }
 
+/** A quick blade swish. */
+export function slice() {
+  tone(1800, 0, 0.16, 'sawtooth', 0.07, 300)
+  tone(900, 0.03, 0.12, 'triangle', 0.05, 200)
+}
+
 export function thud() {
   tone(140, 0, 0.35, 'sine', 0.4, 35)
 }
