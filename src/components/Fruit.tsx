@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import { BallCollider, CylinderCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
+import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
 import { fruitPositions, useSim } from '../sim/store'
-import { LOOKS, ROLE_TAG } from './fruitLooks'
+import { ROLE_TAG } from './fruitLooks'
+import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
 
 // Body
-const RADIUS = 0.55
 const HOVER_HEIGHT = 1.0 // body centre above the ground; the legs fill the gap
 const GRAVITY = 20
 
@@ -39,7 +39,6 @@ const FOOT_Y = 0.07
 // Face: tiny dot eyes and a flat 2D mouth that snaps between drawn shapes
 // while talking, like animatic lip sync. Shape 0 is the resting line.
 const EYE_RADIUS = 0.035
-const EYE_SPREAD = 0.085
 const MOUTH_SHAPES = 5
 const MOUTH_HOLD_MIN = 0.08 // seconds each shape is held
 const MOUTH_HOLD_JITTER = 0.08
@@ -48,12 +47,6 @@ const MOUTH_HOLD_JITTER = 0.08
 const ARM_SEGMENT = 0.3
 const ARM_DRAG = 0.94
 const ARM_GRAVITY = 12
-const LIMB_COLOR = '#151515'
-
-// A chopped fruit falls apart into these horizontal slices. Angles are measured
-// down from the top of the sphere, in radians; the face rides on the third slice.
-const SLICE_CUTS = [0, 0.96, 1.36, 1.95, Math.PI]
-const FACE_SLICE = 2
 
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
@@ -105,7 +98,8 @@ export default function Fruit({ id }: { id: string }) {
   const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
   const knife = useRef<Group>(null)
   const { alive, kind } = fruit
-  const look = LOOKS[kind]
+  // Where the face and arms sit on this fruit's particular shape.
+  const face = useMemo(() => anchors(kind), [kind])
 
   // Spawn point is fixed at mount so later layout changes walk the fruit instead of teleporting it.
   const [spawn] = useState<[number, number, number]>(() => [fruit.home[0], HOVER_HEIGHT, fruit.home[1]])
@@ -340,7 +334,7 @@ export default function Fruit({ id }: { id: string }) {
     }
     arms.current.forEach((arm, i) => {
       const side = i === 0 ? -1 : 1
-      v.shoulder.set(side * RADIUS * look.scale[0] * 0.93, 0, 0).applyQuaternion(v.quat).add(v.pos)
+      v.shoulder.set(side * face.shoulderX * 0.93, face.y, 0).applyQuaternion(v.quat).add(v.pos)
       for (const point of arm) {
         v.tmp.subVectors(point.pos, point.prev).multiplyScalar(ARM_DRAG)
         point.prev.copy(point.pos)
@@ -421,29 +415,16 @@ export default function Fruit({ id }: { id: string }) {
     })
   })
 
-  const faceZ = RADIUS * look.scale[2]
-
   return (
     <>
       <RigidBody ref={body} colliders={false} position={spawn} linearDamping={0.1} angularDamping={0.2}>
         <BallCollider args={[RADIUS]} friction={0.6} restitution={0.4} />
         <group ref={visual} visible={!chop}>
-          <mesh castShadow scale={look.scale}>
-            <sphereGeometry args={[RADIUS, 32, 24]} />
-            <meshStandardMaterial color={look.color} roughness={0.45} />
-          </mesh>
-          <mesh castShadow position={[0, RADIUS * look.scale[1] + 0.06, 0]} rotation={[0, 0, 0.25]}>
-            <cylinderGeometry args={[0.025, 0.035, 0.2, 6]} />
-            <meshStandardMaterial color="#5a3a1c" />
-          </mesh>
-          <mesh castShadow position={[0.1, RADIUS * look.scale[1] + 0.1, 0]} rotation={[0, 0, -0.9]} scale={[1, 0.25, 0.55]}>
-            <sphereGeometry args={[0.14, 12, 8]} />
-            <meshStandardMaterial color="#3f9b3a" />
-          </mesh>
+          <FruitBody kind={kind} />
 
           {/* Eyes: dots while alive, little crosses once dead. */}
           {[-1, 1].map((side, i) => (
-            <group key={side} position={[side * EYE_SPREAD, 0.08 + eyeOffsets[i], faceZ * 0.97]}>
+            <group key={side} position={[side * EYE_SPREAD, face.y + 0.08 + eyeOffsets[i], face.eyeZ * 0.985]}>
               <mesh visible={alive}>
                 <sphereGeometry args={[EYE_RADIUS, 12, 12]} />
                 <meshBasicMaterial color={LIMB_COLOR} />
@@ -458,7 +439,7 @@ export default function Fruit({ id }: { id: string }) {
           ))}
 
           {/* Flat mouth shapes, one visible at a time: line, short line, "o", open oval, open grin. */}
-          <group position={[0, -0.06, faceZ + 0.006]}>
+          <group position={[0, face.y - 0.06, face.mouthZ + 0.008]}>
             {[
               <planeGeometry args={[0.15, 0.022]} />,
               <planeGeometry args={[0.08, 0.022]} />,
@@ -481,7 +462,7 @@ export default function Fruit({ id }: { id: string }) {
         </group>
       </RigidBody>
 
-      {chop && <Slices look={look} position={chop.position} quaternion={chop.quaternion} />}
+      {chop && <FruitSlices kind={kind} position={chop.position} quaternion={chop.quaternion} />}
 
       <group ref={knife} visible={false} scale={1.7}>
         <mesh castShadow position={[0, 0.02, 0]}>
@@ -549,98 +530,6 @@ export default function Fruit({ id }: { id: string }) {
           </div>
         </Html>
       </group>
-    </>
-  )
-}
-
-/**
- * A chopped fruit: horizontal slices, each its own rigid body, with skin on the
- * outside and pale flesh on the cut faces. They start stacked where the whole
- * fruit stood and are nudged apart so they topple onto the ground.
- */
-function Slices({
-  look,
-  position,
-  quaternion,
-}: {
-  look: (typeof LOOKS)[keyof typeof LOOKS]
-  position: [number, number, number]
-  quaternion: [number, number, number, number]
-}) {
-  // Random shove per slice, fixed for the life of the pieces.
-  const kicks = useMemo(
-    () =>
-      SLICE_CUTS.slice(1).map(() => ({
-        linear: [(Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3] as [number, number, number],
-        angular: [(Math.random() - 0.5) * 6, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 6] as [number, number, number],
-      })),
-    [],
-  )
-
-  return (
-    <>
-      {kicks.map((kick, i) => {
-        const from = SLICE_CUTS[i]
-        const to = SLICE_CUTS[i + 1]
-        const top = RADIUS * Math.cos(from)
-        const bottom = RADIUS * Math.cos(to)
-        // Widest point of this slice: the equator if the slice spans it.
-        const widest = RADIUS * (from < Math.PI / 2 && to > Math.PI / 2 ? 1 : Math.max(Math.sin(from), Math.sin(to)))
-        return (
-          <RigidBody
-            key={i}
-            colliders={false}
-            position={position}
-            quaternion={quaternion}
-            linearVelocity={kick.linear}
-            angularVelocity={kick.angular}
-            linearDamping={0.3}
-            angularDamping={0.8}
-          >
-            <CylinderCollider args={[((top - bottom) / 2) * look.scale[1], widest * 0.92]} position={[0, ((top + bottom) / 2) * look.scale[1], 0]} friction={0.9} restitution={0.2} />
-            <group scale={look.scale}>
-              <mesh castShadow>
-                <sphereGeometry args={[RADIUS, 28, 6, 0, Math.PI * 2, from, to - from]} />
-                <meshStandardMaterial color={look.color} roughness={0.45} />
-              </mesh>
-              {from > 0 && (
-                <mesh position={[0, top, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                  <circleGeometry args={[RADIUS * Math.sin(from), 28]} />
-                  <meshStandardMaterial color={look.flesh} roughness={0.6} />
-                </mesh>
-              )}
-              {to < Math.PI && (
-                <mesh position={[0, bottom, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <circleGeometry args={[RADIUS * Math.sin(to), 28]} />
-                  <meshStandardMaterial color={look.flesh} roughness={0.6} />
-                </mesh>
-              )}
-              {i === 0 && (
-                <mesh castShadow position={[0, RADIUS + 0.06, 0]} rotation={[0, 0, 0.25]}>
-                  <cylinderGeometry args={[0.025, 0.035, 0.2, 6]} />
-                  <meshStandardMaterial color="#5a3a1c" />
-                </mesh>
-              )}
-              {/* The dead face, crosses for eyes, stays on its slice. */}
-              {i === FACE_SLICE &&
-                [-1, 1].map((side) =>
-                  [1, -1].map((tilt) => (
-                    <mesh key={`${side}${tilt}`} position={[side * EYE_SPREAD, 0.05, RADIUS]} rotation={[0, 0, (tilt * Math.PI) / 4]}>
-                      <planeGeometry args={[0.1, 0.02]} />
-                      <meshBasicMaterial color={LIMB_COLOR} />
-                    </mesh>
-                  )),
-                )}
-              {i === FACE_SLICE && (
-                <mesh position={[0, -0.08, RADIUS * 0.99]}>
-                  <planeGeometry args={[0.13, 0.022]} />
-                  <meshBasicMaterial color={LIMB_COLOR} />
-                </mesh>
-              )}
-            </group>
-          </RigidBody>
-        )
-      })}
     </>
   )
 }
