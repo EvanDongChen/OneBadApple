@@ -15,14 +15,3 @@ export const LOOKS: Record<FruitKind, { color: string; scale: [number, number, n
 }
 
 export const ROLE_TAG: Record<Role, string> = { werewolf: 'Wolf', villager: 'Villager', seer: 'Seer', doctor: 'Doctor' }
-
-/** Deterministic random numbers so the scenery is the same on every load. */
-export function seededRandom(seed: number) {
-  let a = seed
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}

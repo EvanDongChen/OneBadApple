@@ -2,8 +2,7 @@ import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import Environment from './components/Environment'
-import Village from './components/Village'
+import Stage from './components/Stage'
 import Fruit from './components/Fruit'
 import Hud from './components/Hud'
 import SetupPanel from './components/SetupPanel'
@@ -15,11 +14,11 @@ export default function App() {
 
   return (
     <>
-      <Canvas shadows camera={{ position: [0, 12, 21], fov: 42, near: 0.5, far: 600 }}>
-        <Environment />
+      {/* dpr is capped so high-density screens don't render four times the pixels. */}
+      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 12, 21], fov: 42, near: 0.5, far: 300 }}>
         <Suspense fallback={null}>
           <Physics gravity={[0, -20, 0]}>
-            <Village />
+            <Stage />
             {ids.split(',').map((id) => (
               <Fruit key={id} id={id} />
             ))}
