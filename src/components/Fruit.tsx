@@ -45,11 +45,13 @@ const LOOKS: Record<FruitKind, { color: string; scale: [number, number, number] 
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
 
-// Face: tiny dot eyes and a flat line mouth that pops into an "o" while talking.
+// Face: tiny dot eyes and a flat 2D mouth that snaps between drawn shapes
+// while talking, like animatic lip sync. Shape 0 is the resting line.
 const EYE_RADIUS = 0.035
 const EYE_SPREAD = 0.085
-const MOUTH_LINE: [number, number] = [1, 0.12] // x, y scale when shut
-const MOUTH_ROUND: [number, number] = [0.6, 0.8] // x, y scale when fully open
+const MOUTH_SHAPES = 5
+const MOUTH_HOLD_MIN = 0.08 // seconds each shape is held
+const MOUTH_HOLD_JITTER = 0.08
 
 // Arms: two-segment floppy sticks, simulated as a damped verlet chain.
 const ARM_SEGMENT = 0.3
@@ -90,8 +92,9 @@ export default function Fruit({ def }: { def: FruitDef }) {
   const body = useRef<RapierRigidBody>(null)
   const visual = useRef<Group>(null)
   const overlay = useRef<Group>(null)
-  const mouth = useRef<Mesh>(null)
-  const mouthOpen = useRef(0)
+  const mouthMeshes = useRef<(Mesh | null)[]>([])
+  const mouthShape = useRef(0)
+  const mouthTimer = useRef(0)
   const armMeshes = useRef<(Mesh | null)[]>([null, null, null, null])
   // Per arm: [elbow, hand]. Seeded on the first frame once the body position is known.
   const arms = useRef<ArmPoint[][] | null>(null)
@@ -206,7 +209,7 @@ export default function Fruit({ def }: { def: FruitDef }) {
     )
   })
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     const b = body.current
     if (!b) return
     const t = b.translation()
@@ -225,19 +228,23 @@ export default function Fruit({ def }: { def: FruitDef }) {
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
 
-    // Mouth: flat line at rest, flaps toward a round "o" while talking.
-    // Two mixed sines so it doesn't look metronomic.
-    if (mouth.current) {
-      const time = state.clock.elapsedTime
-      const target = speechText ? Math.abs(Math.sin(time * 13) * 0.65 + Math.sin(time * 7.3) * 0.35) : 0
-      mouthOpen.current += (target - mouthOpen.current) * Math.min(1, delta * 25)
-      const o = mouthOpen.current
-      mouth.current.scale.set(
-        MOUTH_LINE[0] + (MOUTH_ROUND[0] - MOUTH_LINE[0]) * o,
-        MOUTH_LINE[1] + (MOUTH_ROUND[1] - MOUTH_LINE[1]) * o,
-        0.2,
-      )
+    // Mouth: resting line when quiet; while talking, snap to a new shape every few frames.
+    let shape = 0
+    if (speechText) {
+      mouthTimer.current -= delta
+      shape = mouthShape.current
+      if (mouthTimer.current <= 0) {
+        // Pick any shape other than the current one.
+        shape = (shape + 1 + Math.floor(Math.random() * (MOUTH_SHAPES - 1))) % MOUTH_SHAPES
+        mouthTimer.current = MOUTH_HOLD_MIN + Math.random() * MOUTH_HOLD_JITTER
+      }
+    } else {
+      mouthTimer.current = 0
     }
+    mouthShape.current = shape
+    mouthMeshes.current.forEach((mesh, i) => {
+      if (mesh) mesh.visible = i === shape
+    })
 
     // Floppy arms: verlet points hanging off each shoulder, dragged around by the body.
     const dt = Math.min(delta, 1 / 30)
@@ -334,10 +341,27 @@ export default function Fruit({ def }: { def: FruitDef }) {
               <meshBasicMaterial color={LIMB_COLOR} />
             </mesh>
           ))}
-          <mesh ref={mouth} position={[0, -0.05, RADIUS * look.scale[2] * 0.98]} scale={[MOUTH_LINE[0], MOUTH_LINE[1], 0.2]}>
-            <sphereGeometry args={[0.085, 16, 12]} />
-            <meshBasicMaterial color={LIMB_COLOR} />
-          </mesh>
+          {/* Flat mouth shapes, one visible at a time: line, short line, "o", open oval, open grin. */}
+          <group position={[0, -0.06, RADIUS * look.scale[2] + 0.006]}>
+            {[
+              <planeGeometry args={[0.15, 0.022]} />,
+              <planeGeometry args={[0.08, 0.022]} />,
+              <ringGeometry args={[0.028, 0.05, 20]} />,
+              <circleGeometry args={[0.055, 20]} />,
+              <circleGeometry args={[0.08, 20, Math.PI, Math.PI]} />,
+            ].map((geometry, i) => (
+              <mesh
+                key={i}
+                ref={(m) => void (mouthMeshes.current[i] = m)}
+                visible={i === 0}
+                scale={i === 3 ? [0.8, 1.1, 1] : 1}
+                position={[0, i === 4 ? 0.03 : 0, 0]}
+              >
+                {geometry}
+                <meshBasicMaterial color={LIMB_COLOR} />
+              </mesh>
+            ))}
+          </group>
         </group>
       </RigidBody>
 
