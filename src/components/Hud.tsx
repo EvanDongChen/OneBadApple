@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { startGame, stopGame } from '../sim/engine'
 import { useSim } from '../sim/store'
 import type { Phase } from '../sim/types'
@@ -30,6 +30,8 @@ export default function Hud() {
   const calls = useSim((s) => s.calls)
   const settings = useSim((s) => s.settings)
   const logEnd = useRef<HTMLDivElement>(null)
+  const [mindId, setMindId] = useState<string | null>(null)
+  const mind = fruits.find((f) => f.id === mindId)
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: 'end' })
@@ -60,13 +62,41 @@ export default function Hud() {
 
       <aside className="panel roster">
         {fruits.map((f) => (
-          <div key={f.id} className={`roster-row${f.alive ? '' : ' dead'}`}>
+          <button
+            key={f.id}
+            className={`roster-row${f.alive ? '' : ' dead'}${f.id === mindId ? ' on' : ''}`}
+            onClick={() => setMindId(f.id === mindId ? null : f.id)}
+          >
             <span className="dot" style={{ background: LOOKS[f.kind].color }} />
             <span className="who">{f.name}</span>
             {(revealRoles || !f.alive) && <span className={`role ${f.role}`}>{ROLE_TAG[f.role]}</span>}
             {voteCount(f.id) > 0 && <span className="votes">{voteCount(f.id)} vote{voteCount(f.id) > 1 ? 's' : ''}</span>}
-          </div>
+          </button>
         ))}
+        <p className="muted">Click a fruit to read its mind (spoilers).</p>
+        {mind && (
+          <div className="mind">
+            <div>
+              <b>{mind.name}</b> <span className={`role ${mind.role}`}>{ROLE_TAG[mind.role]}</span>
+            </div>
+            <p className="thought">{mind.thought ? `"${mind.thought}"` : 'No thoughts yet.'}</p>
+            {fruits
+              .filter((o) => o.id !== mind.id && mind.feelings[o.id])
+              .map((o) => {
+                const feel = mind.feelings[o.id]
+                return (
+                  <div key={o.id} className={`feeling${o.alive ? '' : ' dead'}`}>
+                    <span className="who">{o.name}</span>
+                    <span className={`trust ${feel.trust > 0 ? 'good' : feel.trust < 0 ? 'bad' : ''}`}>
+                      {feel.trust > 0 ? '+' : ''}
+                      {feel.trust}
+                    </span>
+                    <span className="note">{feel.note}</span>
+                  </div>
+                )
+              })}
+          </div>
+        )}
         {settings.brain === 'gemini' && (
           <p className="muted">
             Gemini calls: {calls} / {settings.maxCalls}
