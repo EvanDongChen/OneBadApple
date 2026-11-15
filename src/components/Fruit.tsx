@@ -45,6 +45,10 @@ const LOOKS: Record<FruitKind, { color: string; scale: [number, number, number] 
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
 
+// Mouth: vertical scale when shut, and how far it flaps open while talking.
+const MOUTH_CLOSED = 0.18
+const MOUTH_FLAP = 1.1
+
 interface Foot {
   pos: Vector3
   from: Vector3
@@ -61,6 +65,8 @@ export default function Fruit({ def }: { def: FruitDef }) {
   const body = useRef<RapierRigidBody>(null)
   const visual = useRef<Group>(null)
   const overlay = useRef<Group>(null)
+  const mouth = useRef<Mesh>(null)
+  const mouthOpen = useRef(MOUTH_CLOSED)
   const legMeshes = useRef<(Mesh | null)[]>([null, null])
   const footMeshes = useRef<(Mesh | null)[]>([null, null])
   const feet = useRef<Foot[]>([
@@ -169,7 +175,7 @@ export default function Fruit({ def }: { def: FruitDef }) {
     )
   })
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const b = body.current
     if (!b) return
     const t = b.translation()
@@ -187,6 +193,16 @@ export default function Fruit({ def }: { def: FruitDef }) {
     }
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
+
+    // Mouth flaps while talking: two mixed sines so it doesn't look metronomic.
+    if (mouth.current) {
+      const time = state.clock.elapsedTime
+      const target = speechText
+        ? MOUTH_CLOSED + MOUTH_FLAP * Math.abs(Math.sin(time * 13) * 0.65 + Math.sin(time * 7.3) * 0.35)
+        : MOUTH_CLOSED
+      mouthOpen.current += (target - mouthOpen.current) * Math.min(1, delta * 25)
+      mouth.current.scale.set(1, mouthOpen.current, 0.3)
+    }
 
     // Procedural stepping: a foot stays planted until the body drifts away from it.
     v.fwd.set(0, 0, 1).applyQuaternion(v.quat).setY(0)
@@ -256,6 +272,10 @@ export default function Fruit({ def }: { def: FruitDef }) {
               <meshStandardMaterial color="#1b1b1b" roughness={0.2} />
             </mesh>
           ))}
+          <mesh ref={mouth} position={[0, -0.1, RADIUS * look.scale[2] * 0.95]} scale={[1, MOUTH_CLOSED, 0.3]}>
+            <sphereGeometry args={[0.11, 16, 12]} />
+            <meshStandardMaterial color="#3b0d12" roughness={0.6} />
+          </mesh>
         </group>
       </RigidBody>
 
