@@ -3,6 +3,7 @@ import { startGame, stopGame } from '../sim/engine'
 import { useSim } from '../sim/store'
 import type { Phase } from '../sim/types'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
+import RichText from './RichText'
 
 const PHASE_LABEL: Record<Phase, string> = {
   setup: 'Setup',
@@ -10,13 +11,13 @@ const PHASE_LABEL: Record<Phase, string> = {
   dawn: 'Dawn',
   mingle: 'Morning chats',
   discussion: 'Village meeting',
-  vote: 'Vote',
+  vote: 'The vote',
   over: 'Game over',
 }
 
 const SPEEDS = [1, 2, 4]
 
-/** In-game overlay: phase bar and controls, the roster, the event log and the end banner. */
+/** In-game overlay: the hanging sign with controls, the villager list, the gossip log and the end card. */
 export default function Hud() {
   const phase = useSim((s) => s.phase)
   const day = useSim((s) => s.day)
@@ -32,6 +33,7 @@ export default function Hud() {
   const logEnd = useRef<HTMLDivElement>(null)
   const [mindId, setMindId] = useState<string | null>(null)
   const mind = fruits.find((f) => f.id === mindId)
+  const dark = phase === 'night'
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: 'end' })
@@ -41,26 +43,26 @@ export default function Hud() {
 
   return (
     <>
-      <header className="panel topbar">
-        <span className={`phase ${phase}`}>
-          {phase === 'over' ? 'Game over' : `Day ${day} · ${PHASE_LABEL[phase]}`}
-        </span>
-        <button onClick={() => useSim.setState({ paused: !paused })}>{paused ? 'Resume' : 'Pause'}</button>
-        <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>
-          Speed {speed}x
-        </button>
-        <button className={revealRoles ? 'on' : ''} onClick={() => useSim.setState({ revealRoles: !revealRoles })}>
-          {revealRoles ? 'Hide roles' : 'Reveal roles'}
-        </button>
-        <button onClick={() => useSim.getState().setSettings({ muted: !settings.muted })}>
-          {settings.muted ? 'Unmute' : 'Mute'}
-        </button>
-        <button className="danger" onClick={stopGame}>
-          End game
-        </button>
+      <header className="sign">
+        <div className="plank">
+          <span className={`sky-icon${dark ? ' moon' : ''}`} />
+          <span className="phase">{phase === 'over' ? 'Game over' : `Day ${day}: ${PHASE_LABEL[phase]}`}</span>
+        </div>
+        <div className="controls">
+          <button onClick={() => useSim.setState({ paused: !paused })}>{paused ? 'Resume' : 'Pause'}</button>
+          <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>Speed {speed}x</button>
+          <button className={revealRoles ? 'on' : ''} onClick={() => useSim.setState({ revealRoles: !revealRoles })}>
+            {revealRoles ? 'Hide roles' : 'Peek at roles'}
+          </button>
+          <button onClick={() => useSim.getState().setSettings({ muted: !settings.muted })}>{settings.muted ? 'Sound on' : 'Sound off'}</button>
+          <button className="danger" onClick={stopGame}>
+            Quit
+          </button>
+        </div>
       </header>
 
       <aside className="panel roster">
+        <h2>Villagers</h2>
         {fruits.map((f) => (
           <button
             key={f.id}
@@ -70,26 +72,29 @@ export default function Hud() {
             <span className="dot" style={{ background: LOOKS[f.kind].color }} />
             <span className="who">{f.name}</span>
             {(revealRoles || !f.alive) && <span className={`role ${f.role}`}>{ROLE_TAG[f.role]}</span>}
-            {voteCount(f.id) > 0 && <span className="votes">{voteCount(f.id)} vote{voteCount(f.id) > 1 ? 's' : ''}</span>}
+            {voteCount(f.id) > 0 && <span className="votes">{'✗'.repeat(voteCount(f.id))}</span>}
           </button>
         ))}
-        <p className="muted">Click a fruit to read its mind (spoilers).</p>
+        <p className="hint">Tap a fruit to read its mind. Spoilers!</p>
         {mind && (
           <div className="mind">
-            <div>
-              <b>{mind.name}</b> <span className={`role ${mind.role}`}>{ROLE_TAG[mind.role]}</span>
+            <div className="mind-head">
+              <span className="dot" style={{ background: LOOKS[mind.kind].color }} />
+              <b>{mind.name}</b>
+              <span className={`role ${mind.role}`}>{ROLE_TAG[mind.role]}</span>
             </div>
-            <p className="thought">{mind.thought ? `"${mind.thought}"` : 'No thoughts yet.'}</p>
+            <p className="thought">{mind.thought ? <RichText text={mind.thought} /> : 'Nothing on its mind yet.'}</p>
             {fruits
               .filter((o) => o.id !== mind.id && mind.feelings[o.id])
               .map((o) => {
                 const feel = mind.feelings[o.id]
                 return (
                   <div key={o.id} className={`feeling${o.alive ? '' : ' dead'}`}>
-                    <span className="who">{o.name}</span>
-                    <span className={`trust ${feel.trust > 0 ? 'good' : feel.trust < 0 ? 'bad' : ''}`}>
-                      {feel.trust > 0 ? '+' : ''}
-                      {feel.trust}
+                    <span className="who">
+                      <RichText text={o.name} />
+                    </span>
+                    <span className="meter" title={`Trust ${feel.trust}`}>
+                      <i className={feel.trust < 0 ? 'bad' : 'good'} style={{ width: `${Math.abs(feel.trust) * 10}%`, [feel.trust < 0 ? 'right' : 'left']: '50%' }} />
                     </span>
                     <span className="note">{feel.note}</span>
                   </div>
@@ -98,33 +103,41 @@ export default function Hud() {
           </div>
         )}
         {settings.brain === 'gemini' && (
-          <p className="muted">
-            Gemini calls: {calls} / {settings.maxCalls}
+          <p className="hint">
+            Gemini calls: {calls} of {settings.maxCalls}
           </p>
         )}
       </aside>
 
       <section className="panel log">
-        {log.map((entry, i) => (
-          <p key={i} className={entry.kind}>
-            {entry.name && <b>{entry.name}{entry.kind === 'whisper' ? ' (privately)' : ''}: </b>}
-            {entry.text}
-          </p>
-        ))}
-        <div ref={logEnd} />
+        <h2>Village gossip</h2>
+        <div className="log-lines">
+          {log.map((entry, i) => (
+            <p key={i} className={entry.kind}>
+              {entry.name && (
+                <>
+                  <RichText text={entry.name} />
+                  <span className="verb">{entry.kind === 'whisper' ? ' whispers: ' : ': '}</span>
+                </>
+              )}
+              <RichText text={entry.text} />
+            </p>
+          ))}
+          <div ref={logEnd} />
+        </div>
       </section>
 
       {winner && (
         <div className="panel banner">
-          <h2>{winner === 'village' ? 'The village wins' : 'The werewolves win'}</h2>
-          <p className="muted">
-            {winner === 'village' ? 'Every werewolf was caught.' : 'The wolves now outnumber the rest.'} Lasted {day} day{day > 1 ? 's' : ''}.
+          <h1>{winner === 'village' ? 'The village wins!' : 'The wolves win!'}</h1>
+          <p>
+            {winner === 'village' ? 'Every werewolf was caught.' : 'The wolves now outnumber everyone else.'} It took {day} day{day > 1 ? 's' : ''}.
           </p>
           <div className="row">
             <button className="primary" onClick={startGame}>
               Play again
             </button>
-            <button onClick={stopGame}>Change setup</button>
+            <button onClick={stopGame}>Change the villagers</button>
           </div>
         </div>
       )}

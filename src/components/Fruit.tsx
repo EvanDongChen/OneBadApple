@@ -6,6 +6,7 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
 import { fruitPositions, useSim } from '../sim/store'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
+import RichText from './RichText'
 
 // Body
 const RADIUS = 0.55
@@ -25,7 +26,7 @@ const LEAN_GAIN = 1.5
 const WADDLE_TORQUE = 9
 const ARRIVE_DISTANCE = 0.35
 const FOLLOW_DISTANCE = 1.5
-const FIRE_AVOID_RADIUS = 2.6
+const CENTRE_KEEP_OUT = 2.6 // radius of the meeting circle fruits stand around, not in
 
 // Legs
 const HIP_SPREAD = 0.22
@@ -205,12 +206,12 @@ export default function Fruit({ id }: { id: string }) {
     if (walking) v.want.multiplyScalar(WALK_SPEED / distance)
     else v.want.set(0, 0, 0)
 
-    // Keep out of the campfire: always pushed outward, and steered around it when walking past.
+    // Keep the middle of the meeting circle clear: pushed outward, and steered around it when walking past.
     const fromFire = Math.hypot(t.x, t.z)
-    if (fromFire < FIRE_AVOID_RADIUS && fromFire > 1e-3) {
+    if (fromFire < CENTRE_KEEP_OUT && fromFire > 1e-3) {
       const ox = t.x / fromFire
       const oz = t.z / fromFire
-      const strength = (FIRE_AVOID_RADIUS - fromFire) * 4
+      const strength = (CENTRE_KEEP_OUT - fromFire) * 4
       v.want.x += ox * strength
       v.want.z += oz * strength
       if (walking) {
@@ -236,7 +237,7 @@ export default function Fruit({ id }: { id: string }) {
     }
 
     // Face the direction of travel; when standing, face who we walked up to,
-    // else whoever is talking, else the fire.
+    // else whoever is talking, else the centre.
     if (walking) {
       v.tmp.copy(v.want)
     } else {
@@ -446,8 +447,8 @@ export default function Fruit({ id }: { id: string }) {
       <group ref={overlay}>
         <Html center zIndexRange={[10, 0]}>
           <div className={`fruit-tag${alive ? '' : ' dead'}`}>
-            {speechText && alive && <div className={`bubble${whispering ? ' whisper' : ''}`}>{speechText}</div>}
-            {thinking && !speechText && <div className="bubble thinking">...</div>}
+            {speechText && alive && <div className={`bubble${whispering ? ' whisper' : ''}`}><RichText text={speechText} /></div>}
+            {thinking && !speechText && <div className="bubble thinking"><i /><i /><i /></div>}
             <div className="name">
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}

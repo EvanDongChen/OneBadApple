@@ -44,10 +44,10 @@ export default function SetupPanel() {
   return (
     <aside className="panel setup">
       <h1>One Bad Apple</h1>
-      <p className="muted">A village of fruit plays Werewolf. Set them up, then watch.</p>
+      <p className="tagline">A village of fruit plays Werewolf. One of them is rotten.</p>
 
       <section>
-        <h2>Brain</h2>
+        <h2>Who does the thinking?</h2>
         <div className="segmented">
           <button className={settings.brain === 'gemini' ? 'on' : ''} onClick={() => setSettings({ brain: 'gemini' })}>
             Gemini AI
@@ -112,7 +112,7 @@ export default function SetupPanel() {
 
       <section>
         <div className="row spread">
-          <h2>Fruits ({roster.length})</h2>
+          <h2>The villagers ({roster.length})</h2>
           <div className="row">
             <button onClick={randomizeRoster}>Shuffle</button>
             <button onClick={addFruit} disabled={roster.length >= MAX_FRUITS}>
@@ -180,7 +180,7 @@ export default function SetupPanel() {
       </section>
 
       <button className="primary" onClick={start} disabled={needsKey}>
-        {needsKey ? 'Enter a Gemini key to start' : 'Start simulation'}
+        {needsKey ? 'Paste a Gemini key first' : 'Wake the village'}
       </button>
     </aside>
   )
