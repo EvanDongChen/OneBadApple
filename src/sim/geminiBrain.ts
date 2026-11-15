@@ -259,7 +259,7 @@ export class GeminiBrain implements Brain {
       [
         `It is day ${world.day}. Write the whole day in order:`,
         '- "plans": the morning. For EVERY living fruit, the ONE other living fruit it chooses to walk up to ("approach") and the "line" it says to them privately: probing, warning, allying or lying, as its feelings and personality dictate.',
-        `- "discussion": the village meeting at the campfire, about ${turns} lines in speaking order. Fruits react to the lines before them: accuse, defend, bluff, change the subject. Chattier fruits speak more; quiet ones may speak once or not at all. Private morning lines were only heard by the fruit they were said to.`,
+        `- "discussion": the village meeting, about ${turns} lines in speaking order. Fruits react to the lines before them: accuse, defend, bluff, change the subject. Chattier fruits speak more; quiet ones may speak once or not at all. Private morning lines were only heard by the fruit they were said to.`,
         '- "votes": after the meeting, EVERY living fruit votes for ONE other living fruit ("target"), with a short "reason" said out loud. Votes must follow from each fruit\'s own feelings and what was said in the discussion you just wrote.',
       ].join('\n'),
       DAY_SCHEMA,

@@ -49,7 +49,7 @@ export interface FruitState extends FruitDef {
   alive: boolean
   /** Spot in front of its hut. */
   home: [number, number]
-  /** Spot at the campfire circle. */
+  /** Spot at the meeting circle. */
   seat: [number, number]
   /** Character sheet, written once at game start and reused in every prompt. */
   persona: string

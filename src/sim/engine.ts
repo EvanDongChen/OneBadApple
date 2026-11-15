@@ -240,7 +240,7 @@ async function mingle(plans: DayScript['plans'], signal: AbortSignal) {
 
 async function discussion(lines: DayScript['discussion'], signal: AbortSignal) {
   setPhase('discussion')
-  log({ kind: 'system', text: 'Everyone gathers at the campfire.' })
+  log({ kind: 'system', text: 'Everyone gathers in the circle.' })
   sendTo((f) => f.seat)
   await until(() => arrived(alive().map((f) => f.id)), 10000, signal)
   for (const line of lines) await say(byId(line.id), line.say, 'say', signal)

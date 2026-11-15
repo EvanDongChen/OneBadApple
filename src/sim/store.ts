@@ -5,7 +5,7 @@ import type { FruitDef, FruitState, LogEntry, Phase, Traits } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
-export const HUT_RING = 13.5
+
 const HOME_RING = 10.4
 const SEAT_RING = 3.8
 
