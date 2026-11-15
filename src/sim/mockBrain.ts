@@ -1,6 +1,30 @@
-import type { AgentView, Brain, Choice, DayPlan, Speech } from './types'
+import type { Brain, DayScript, FruitState, NightScript, WorldView } from './types'
 
 type Other = { id: string; name: string }
+
+/** What one fruit is allowed to know when it decides something. */
+interface AgentView {
+  self: FruitState
+  /** Living fruits other than self. */
+  others: Other[]
+  publicLog: string[]
+}
+
+interface DayPlan {
+  approach: string
+  line: string
+}
+
+interface Speech {
+  say: string
+}
+
+interface Choice {
+  target: string
+  reason: string
+}
+
+const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
 function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)]
@@ -183,5 +207,86 @@ export class MockBrain implements Brain {
     const selfish = Math.random() > traits.honesty * 0.8 + 0.1
     const target = selfish || !others.length ? candidates.find((c) => c.id === id) ?? pick(candidates) : best(others, (c) => -this.suspicionOf(view, c))
     return { target: target.id, reason: '' }
+  }
+
+  private view(world: WorldView, self: FruitState, publicLog: string[]): AgentView {
+    return {
+      self,
+      others: world.fruits.filter((f) => f.alive && f.id !== self.id).map((f) => ({ id: f.id, name: f.name })),
+      publicLog,
+    }
+  }
+
+  /** One fruit's inner state, derived from the same scoring its decisions use. */
+  private mind(view: AgentView): NightScript['minds'][number] {
+    const feelings = view.others.map((o) => {
+      const grudge = this.mentions(view, o.name, view.self.name)
+      const note = this.isPackmate(view, o)
+        ? 'Pack.'
+        : this.knownWolf(view, o)
+          ? 'I saw it. Werewolf.'
+          : this.knownInnocent(view, o)
+            ? 'I checked. Clean.'
+            : grudge > 0
+              ? 'Accused me.'
+              : ''
+      return { about: o.id, trust: clamp(Math.round(2 - this.suspicionOf(view, o) * 1.5), -5, 5), note }
+    })
+    const worst = feelings.reduce((a, b) => (b.trust < a.trust ? b : a), feelings[0])
+    const worstName = view.others.find((o) => o.id === worst?.about)?.name
+    return {
+      id: view.self.id,
+      thought: !worstName ? '' : view.self.role === 'werewolf' ? `If I can pin this on ${worstName}, I'm safe.` : `I don't trust ${worstName}.`,
+      feelings,
+    }
+  }
+
+  async playNight(world: WorldView): Promise<NightScript> {
+    const living = world.fruits.filter((f) => f.alive)
+    const options = (list: FruitState[]) => list.map((f) => ({ id: f.id, name: f.name }))
+    const view = (f: FruitState) => this.view(world, f, world.publicLog)
+
+    const wolf = living.find((f) => f.role === 'werewolf')!
+    const doctor = living.find((f) => f.role === 'doctor')
+    const seer = living.find((f) => f.role === 'seer')
+    return {
+      kill: (await this.nightAction(view(wolf), options(living.filter((f) => f.role !== 'werewolf')))).target,
+      protect: doctor ? (await this.nightAction(view(doctor), options(living))).target : null,
+      inspect: seer ? (await this.nightAction(view(seer), options(living.filter((f) => f.id !== seer.id)))).target : null,
+      minds: living.map((f) => this.mind(view(f))),
+    }
+  }
+
+  async playDay(world: WorldView): Promise<DayScript> {
+    const living = world.fruits.filter((f) => f.alive)
+    const nameOf = (id: string) => world.fruits.find((f) => f.id === id)?.name ?? id
+    // The log grows as the day is written, so later speakers react to earlier ones.
+    const log = [...world.publicLog]
+    const view = (f: FruitState) => this.view(world, f, log)
+
+    const plans: DayScript['plans'] = []
+    for (const f of living) plans.push({ id: f.id, ...(await this.planDay(view(f))) })
+
+    const discussion: DayScript['discussion'] = []
+    const turns = clamp(Math.round(living.length * 1.5), 4, 12)
+    let last = ''
+    for (let i = 0; i < turns; i++) {
+      // Chattier fruits get the floor more often.
+      const pool = living.filter((f) => f.id !== last)
+      let roll = Math.random() * pool.reduce((sum, f) => sum + 0.25 + f.traits.talkativeness, 0)
+      const speaker = pool.find((f) => (roll -= 0.25 + f.traits.talkativeness) <= 0) ?? pool[0]
+      last = speaker.id
+      const { say } = await this.speak(view(speaker))
+      discussion.push({ id: speaker.id, say })
+      log.push(`${speaker.name}: ${say}`)
+    }
+
+    const votes: DayScript['votes'] = []
+    for (const f of living) {
+      const choice = await this.vote(view(f))
+      votes.push({ id: f.id, ...choice })
+      log.push(`${f.name}: I vote ${nameOf(choice.target)}.`)
+    }
+    return { plans, discussion, votes }
   }
 }

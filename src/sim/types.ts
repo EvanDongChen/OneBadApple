@@ -35,6 +35,14 @@ export interface FruitDef {
   traits: Traits
 }
 
+/** How one fruit feels about another. */
+export interface Feeling {
+  /** -5 (sure they are a wolf) to +5 (would trust with its life). */
+  trust: number
+  /** Short reason, in the fruit's own words. */
+  note: string
+}
+
 /** A fruit in a running game. */
 export interface FruitState extends FruitDef {
   role: Role
@@ -43,8 +51,14 @@ export interface FruitState extends FruitDef {
   home: [number, number]
   /** Spot at the campfire circle. */
   seat: [number, number]
-  /** Private notes only this fruit knows; fed to its brain. */
+  /** Character sheet, written once at game start and reused in every prompt. */
+  persona: string
+  /** Private facts only this fruit knows (role info, night results, whispers). */
   memory: string[]
+  /** What it is privately thinking right now. Rewritten every night. */
+  thought: string
+  /** How it feels about each other fruit, keyed by their id. Rewritten every night. */
+  feelings: Record<string, Feeling>
 }
 
 export interface LogEntry {
@@ -53,40 +67,42 @@ export interface LogEntry {
   text: string
 }
 
-/** Everything one fruit is allowed to know when making a decision. */
-export interface AgentView {
-  self: FruitState
+/** The whole world, handed to a brain for one batched decision. */
+export interface WorldView {
   day: number
-  /** Living fruits other than self. */
-  others: { id: string; name: string }[]
+  /** Every fruit, living and dead. */
+  fruits: FruitState[]
   /** Recent public events and speech, oldest first. */
   publicLog: string[]
 }
 
-export interface DayPlan {
-  /** Who to walk over to this morning. */
-  approach: string
-  /** What to say to them privately. */
-  line: string
+/** Everything that happens in one night, decided in a single batch. */
+export interface NightScript {
+  /** Who the werewolves attack. */
+  kill: string
+  /** Who the doctor guards, if there is a doctor. */
+  protect: string | null
+  /** Who the seer inspects, if there is a seer. */
+  inspect: string | null
+  /** Each living fruit's updated inner state. */
+  minds: { id: string; thought: string; feelings: { about: string; trust: number; note: string }[] }[]
 }
 
-export interface Speech {
-  say: string
-}
-
-export interface Choice {
-  target: string
-  reason: string
+/** Everything that happens in one day, decided in a single batch. */
+export interface DayScript {
+  /** Morning: who each fruit walks up to and what it says privately. */
+  plans: { id: string; approach: string; line: string }[]
+  /** The campfire meeting, in speaking order. */
+  discussion: { id: string; say: string }[]
+  /** One vote per living fruit. */
+  votes: { id: string; target: string; reason: string }[]
 }
 
 /**
- * A fruit's decision-maker. The engine enforces the rules; the brain chooses.
- * Every method must return a valid result (implementations fall back rather than throw).
+ * The decision-maker for the whole village. The engine enforces the rules; the brain chooses.
+ * Both methods must return a complete, legal script (implementations fall back rather than throw).
  */
 export interface Brain {
-  planDay(view: AgentView): Promise<DayPlan>
-  speak(view: AgentView): Promise<Speech>
-  vote(view: AgentView): Promise<Choice>
-  /** Werewolf: who to kill. Seer: who to inspect. Doctor: who to protect (may include self). */
-  nightAction(view: AgentView, candidates: { id: string; name: string }[]): Promise<Choice>
+  playNight(world: WorldView): Promise<NightScript>
+  playDay(world: WorldView): Promise<DayScript>
 }

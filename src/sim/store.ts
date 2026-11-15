@@ -40,7 +40,7 @@ function loadSettings(): Settings {
     apiKey: devKey,
     model: 'gemini-flash-lite-latest',
     requestsPerMinute: 15,
-    maxCalls: 300,
+    maxCalls: 80,
     muted: false,
   }
   try {
@@ -96,7 +96,10 @@ export function layout(roster: FruitDef[]): FruitState[] {
     alive: true,
     home: ring(i, roster.length, HOME_RING),
     seat: ring(i, roster.length, SEAT_RING),
+    persona: '',
     memory: [],
+    thought: '',
+    feelings: {},
   }))
 }
 

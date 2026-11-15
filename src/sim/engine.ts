@@ -1,8 +1,8 @@
-import { GeminiBrain } from './geminiBrain'
+import { buildPersona, GeminiBrain } from './geminiBrain'
 import { MockBrain } from './mockBrain'
 import { babble, dawnChime, nightChime, thud, voteTick } from './sfx'
 import { fruitPositions, layout, useSim } from './store'
-import type { AgentView, Brain, FruitState, LogEntry, Phase, Role } from './types'
+import type { Brain, DayScript, FruitState, LogEntry, NightScript, Phase, Role, WorldView } from './types'
 
 const ROLE_LABEL: Record<Role, string> = {
   werewolf: 'a werewolf',
@@ -92,26 +92,26 @@ function sendTo(spot: (f: FruitState) => [number, number]) {
   set((s) => ({ follow: {}, targets: Object.fromEntries(s.fruits.map((f) => [f.id, spot(f)])) }))
 }
 
-function viewOf(fruit: FruitState): AgentView {
+/** Snapshot handed to the brain for one batched decision. */
+function world(): WorldView {
   const s = get()
   return {
-    self: byId(fruit.id),
     day: s.day,
-    others: s.fruits.filter((f) => f.alive && f.id !== fruit.id).map((f) => ({ id: f.id, name: f.name })),
+    fruits: s.fruits,
     publicLog: s.log
       .filter((e) => e.kind !== 'whisper')
-      .slice(-30)
+      .slice(-40)
       .map((e) => (e.name ? `${e.name}: ${e.text}` : `[${e.text}]`)),
   }
 }
 
-/** Run one brain decision for a fruit, showing a "thinking" bubble while it is pending. */
-async function think<T>(fruit: FruitState, decide: (view: AgentView) => Promise<T>): Promise<T> {
-  set((s) => ({ thinking: { ...s.thinking, [fruit.id]: true } }))
+/** Run one batched brain call, with every living fruit showing a "thinking" bubble meanwhile. */
+async function think<T>(decide: () => Promise<T>): Promise<T> {
+  set({ thinking: Object.fromEntries(alive().map((f) => [f.id, true])) })
   try {
-    return await decide(viewOf(fruit))
+    return await decide()
   } finally {
-    set((s) => ({ thinking: { ...s.thinking, [fruit.id]: false } }))
+    set({ thinking: {} })
   }
 }
 
@@ -131,6 +131,19 @@ function kill(id: string) {
     follow: { ...s.follow, [id]: undefined },
   }))
   thud()
+}
+
+/** Store each fruit's new thought and feelings so the next prompt (and the UI) can use them. */
+function applyMinds(minds: NightScript['minds']) {
+  set((s) => ({
+    fruits: s.fruits.map((f) => {
+      const mind = minds.find((m) => m.id === f.id)
+      if (!mind) return f
+      const feelings = { ...f.feelings }
+      for (const feel of mind.feelings) feelings[feel.about] = { trust: feel.trust, note: feel.note }
+      return { ...f, thought: mind.thought || f.thought, feelings }
+    }),
+  }))
 }
 
 function winner(): 'village' | 'werewolves' | null {
@@ -156,29 +169,25 @@ async function night(brain: Brain, signal: AbortSignal) {
   nightChime()
   log({ kind: 'system', text: `Night ${day} falls. Everyone heads home.` })
   sendTo((f) => f.home)
-  await until(() => arrived(alive().map((f) => f.id)), 10000, signal)
-  await wait(800, signal)
+  // One batched call decides the whole night while the fruits walk home.
+  const [script] = await Promise.all([
+    think(() => brain.playNight(world())),
+    until(() => arrived(alive().map((f) => f.id)), 10000, signal),
+  ])
+  applyMinds(script.minds)
 
   const living = alive()
   const wolves = living.filter((f) => f.role === 'werewolf')
-  const prey = living.filter((f) => f.role !== 'werewolf').map((f) => ({ id: f.id, name: f.name }))
   const hunter = wolves[0]
-  const victimId = (await think(hunter, (v) => brain.nightAction(v, prey))).target
-  const victim = byId(victimId)
+  const victim = byId(script.kill)
   wolves.forEach((w) => remember(w.id, `Night ${day}: the werewolves chose to attack ${victim.name}.`))
 
-  let protectedId: string | null = null
   const doctor = living.find((f) => f.role === 'doctor')
-  if (doctor) {
-    const options = living.map((f) => ({ id: f.id, name: f.name }))
-    protectedId = (await think(doctor, (v) => brain.nightAction(v, options))).target
-    remember(doctor.id, `Night ${day}: you protected ${byId(protectedId).name}.`)
-  }
+  if (doctor && script.protect) remember(doctor.id, `Night ${day}: you protected ${byId(script.protect).name}.`)
 
   const seer = living.find((f) => f.role === 'seer')
-  if (seer) {
-    const options = living.filter((f) => f.id !== seer.id).map((f) => ({ id: f.id, name: f.name }))
-    const seen = byId((await think(seer, (v) => brain.nightAction(v, options))).target)
+  if (seer && script.inspect) {
+    const seen = byId(script.inspect)
     remember(
       seer.id,
       `Night ${day}: you inspected ${seen.name}. ${seen.name} is ${seen.role === 'werewolf' ? 'a WEREWOLF' : 'NOT a werewolf'}.`,
@@ -186,11 +195,11 @@ async function night(brain: Brain, signal: AbortSignal) {
   }
 
   // Act it out: the wolf creeps over to its victim.
-  set((s) => ({ follow: { ...s.follow, [hunter.id]: victimId } }))
-  await until(() => near(hunter.id, victimId, 2), 9000, signal)
+  set((s) => ({ follow: { ...s.follow, [hunter.id]: victim.id } }))
+  await until(() => near(hunter.id, victim.id, 2), 9000, signal)
   await wait(500, signal)
-  const saved = protectedId === victimId
-  if (!saved) kill(victimId)
+  const saved = script.protect === victim.id
+  if (!saved) kill(victim.id)
   await wait(1200, signal)
   sendTo((f) => f.home)
   await wait(1800, signal)
@@ -203,27 +212,14 @@ async function night(brain: Brain, signal: AbortSignal) {
   } else {
     log({ kind: 'system', text: `Dawn of day ${day}. ${victim.name} was found dead. They were ${ROLE_LABEL[victim.role]}.` })
   }
-  await wait(2800, signal)
+  await wait(2500, signal)
 }
 
-async function mingle(brain: Brain, signal: AbortSignal) {
-  setPhase('mingle')
+async function mingle(plans: DayScript['plans'], signal: AbortSignal) {
   log({ kind: 'system', text: 'The fruits mill about before the meeting.' })
-  const living = shuffle(alive())
-  // Spread everyone around the plaza first.
-  const spots = new Map(
-    living.map((f, i) => {
-      const angle = (i / living.length) * Math.PI * 2 + Math.random() * 0.5
-      const radius = 5 + Math.random() * 3
-      return [f.id, [Math.cos(angle) * radius, Math.sin(angle) * radius] as [number, number]]
-    }),
-  )
-  sendTo((f) => spots.get(f.id) ?? f.home)
-  await wait(1500, signal)
-
   const chats: Promise<void>[] = []
-  for (const fruit of living) {
-    const plan = await think(fruit, (v) => brain.planDay(v))
+  for (const plan of shuffle(plans)) {
+    const fruit = byId(plan.id)
     const partner = byId(plan.approach)
     chats.push(
       (async () => {
@@ -236,42 +232,29 @@ async function mingle(brain: Brain, signal: AbortSignal) {
         set((s) => ({ follow: { ...s.follow, [fruit.id]: undefined } }))
       })(),
     )
-    await wait(500, signal)
+    await wait(900, signal)
   }
   await Promise.all(chats)
   await wait(600, signal)
 }
 
-async function discussion(brain: Brain, signal: AbortSignal) {
+async function discussion(lines: DayScript['discussion'], signal: AbortSignal) {
   setPhase('discussion')
   log({ kind: 'system', text: 'Everyone gathers at the campfire.' })
   sendTo((f) => f.seat)
   await until(() => arrived(alive().map((f) => f.id)), 10000, signal)
-
-  const turns = Math.max(4, Math.min(12, Math.round(alive().length * 1.5)))
-  let last = ''
-  for (let i = 0; i < turns; i++) {
-    // Chattier fruits get the floor more often.
-    const pool = alive().filter((f) => f.id !== last)
-    const total = pool.reduce((sum, f) => sum + 0.25 + f.traits.talkativeness, 0)
-    let roll = Math.random() * total
-    const speaker = pool.find((f) => (roll -= 0.25 + f.traits.talkativeness) <= 0) ?? pool[0]
-    last = speaker.id
-    const { say: line } = await think(speaker, (v) => brain.speak(v))
-    await say(speaker, line, 'say', signal)
-  }
+  for (const line of lines) await say(byId(line.id), line.say, 'say', signal)
 }
 
-async function vote(brain: Brain, signal: AbortSignal) {
+async function vote(votes: DayScript['votes'], signal: AbortSignal) {
   setPhase('vote')
   set({ votes: {} })
   log({ kind: 'system', text: 'Time to vote.' })
-  for (const voter of alive()) {
-    const choice = await think(voter, (v) => brain.vote(v))
-    const target = byId(choice.target)
-    set((s) => ({ votes: { ...s.votes, [voter.id]: target.id } }))
+  for (const ballot of votes) {
+    const target = byId(ballot.target)
+    set((s) => ({ votes: { ...s.votes, [ballot.id]: target.id } }))
     voteTick()
-    await say(voter, `I vote ${target.name}. ${choice.reason}`.trim(), 'vote', signal)
+    await say(byId(ballot.id), `I vote ${target.name}. ${ballot.reason}`.trim(), 'vote', signal)
   }
 
   const tally = new Map<string, number>()
@@ -287,6 +270,26 @@ async function vote(brain: Brain, signal: AbortSignal) {
   }
   await wait(3000, signal)
   set({ votes: {} })
+}
+
+/** One batched call writes the whole day; the engine then plays it out. */
+async function daytime(brain: Brain, signal: AbortSignal) {
+  setPhase('mingle')
+  // Spread everyone around the plaza while the day is being decided.
+  const living = shuffle(alive())
+  const spots = new Map(
+    living.map((f, i) => {
+      const angle = (i / living.length) * Math.PI * 2 + Math.random() * 0.5
+      const radius = 5 + Math.random() * 3
+      return [f.id, [Math.cos(angle) * radius, Math.sin(angle) * radius] as [number, number]]
+    }),
+  )
+  sendTo((f) => spots.get(f.id) ?? f.home)
+  const [script] = await Promise.all([think(() => brain.playDay(world())), wait(1500, signal)])
+
+  await mingle(script.plans, signal)
+  await discussion(script.discussion, signal)
+  await vote(script.votes, signal)
 }
 
 function finish(side: 'village' | 'werewolves') {
@@ -315,6 +318,8 @@ async function run(signal: AbortSignal) {
   const fruits = layout(s.roster).map((f, i) => ({ ...f, role: roles[i] }))
   const wolves = fruits.filter((f) => f.role === 'werewolf')
   for (const f of fruits) {
+    // Personas are written once here and reused, unchanged, in every prompt.
+    f.persona = buildPersona(f)
     f.memory = wolves.filter((w) => f.role === 'werewolf' && w.id !== f.id).map((w) => `Fellow werewolf: ${w.name}`)
   }
   set({
@@ -342,9 +347,7 @@ async function run(signal: AbortSignal) {
     await night(brain, signal)
     let side = winner()
     if (side) return finish(side)
-    await mingle(brain, signal)
-    await discussion(brain, signal)
-    await vote(brain, signal)
+    await daytime(brain, signal)
     side = winner()
     if (side) return finish(side)
   }
