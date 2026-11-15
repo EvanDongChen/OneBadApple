@@ -6,7 +6,7 @@ You set up the villagers and their personalities, press start, and the game play
 
 ## What it does
 
-- **Two brains.** In **Gemini AI** mode, Google's Gemini decides everything each fruit does and says. In **No AI** mode, each fruit decides from its personality sliders using built-in rules and a library of about 320 stock lines. No AI mode needs no key and costs nothing.
+- **Two brains.** In **Gemini AI** mode, Google's Gemini decides everything each fruit does and says. In **No AI** mode, each fruit decides from its personality sliders using built-in rules and a library of about 280 stock lines. No AI mode needs no key and costs nothing.
 - **Personalities.** Every fruit has a name, a fruit type, four sliders (aggression, honesty, talkativeness, suspicion) and a free-text quirk. The quirk is only used in Gemini mode.
 - **Roles.** Werewolves, villagers, and optionally a seer, a doctor, a hunter (takes someone down when it dies) and a jester (wins alone if voted out). You choose how many wolves and which roles are in play.
 - **Private conversations.** Each day the fruits split into pairs and talk at the same time, for as many rounds as you set. Only the fruits in a conversation hear it, so rumours spread from fruit to fruit and can be passed on wrongly.
