@@ -9,8 +9,7 @@ const PHASE_LABEL: Record<Phase, string> = {
   setup: 'Setup',
   night: 'Night',
   dawn: 'Dawn',
-  mingle: 'Morning chats',
-  discussion: 'Village meeting',
+  talk: 'Talking it over',
   vote: 'The vote',
   over: 'Game over',
 }
@@ -27,6 +26,7 @@ export default function Hud() {
   const paused = useSim((s) => s.paused)
   const speed = useSim((s) => s.speed)
   const revealRoles = useSim((s) => s.revealRoles)
+  const showThoughts = useSim((s) => s.showThoughts)
   const winner = useSim((s) => s.winner)
   const calls = useSim((s) => s.calls)
   const settings = useSim((s) => s.settings)
@@ -53,6 +53,9 @@ export default function Hud() {
           <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>Speed {speed}x</button>
           <button className={revealRoles ? 'on' : ''} onClick={() => useSim.setState({ revealRoles: !revealRoles })}>
             {revealRoles ? 'Hide roles' : 'Peek at roles'}
+          </button>
+          <button className={showThoughts ? 'on' : ''} onClick={() => useSim.setState({ showThoughts: !showThoughts })}>
+            {showThoughts ? 'Hide thoughts' : 'Show thoughts'}
           </button>
           <button onClick={() => useSim.getState().setSettings({ muted: !settings.muted })}>{settings.muted ? 'Sound on' : 'Sound off'}</button>
           <button className="danger" onClick={stopGame}>
@@ -117,7 +120,13 @@ export default function Hud() {
               {entry.name && (
                 <>
                   <RichText text={entry.name} />
-                  <span className="verb">{entry.kind === 'whisper' ? ' whispers: ' : ': '}</span>
+                  {entry.to && (
+                    <>
+                      <span className="verb"> to </span>
+                      <RichText text={entry.to} />
+                    </>
+                  )}
+                  <span className="verb">: </span>
                 </>
               )}
               <RichText text={entry.text} />
@@ -129,9 +138,14 @@ export default function Hud() {
 
       {winner && (
         <div className="panel banner">
-          <h1>{winner === 'village' ? 'The village wins!' : 'The wolves win!'}</h1>
+          <h1>{winner === 'village' ? 'The village wins!' : winner === 'jester' ? 'The jester wins!' : 'The wolves win!'}</h1>
           <p>
-            {winner === 'village' ? 'Every werewolf was caught.' : 'The wolves now outnumber everyone else.'} It took {day} day{day > 1 ? 's' : ''}.
+            {winner === 'village'
+              ? 'Every werewolf was caught.'
+              : winner === 'jester'
+                ? 'It got itself voted out, which was the plan all along.'
+                : 'The wolves now outnumber everyone else.'}{' '}
+            It took {day} day{day > 1 ? 's' : ''}.
           </p>
           <div className="row">
             <button className="primary" onClick={startGame}>

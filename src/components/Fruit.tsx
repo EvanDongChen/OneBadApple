@@ -95,7 +95,10 @@ export default function Fruit({ id }: { id: string }) {
   const speechText = useSim((s) => s.speech[id])
   const thinking = useSim((s) => s.thinking[id])
   const showRole = useSim((s) => s.screen === 'game' && (s.revealRoles || !s.fruits.find((f) => f.id === id)?.alive))
-  const whispering = useSim((s) => s.phase === 'mingle')
+  const showThought = useSim((s) => s.showThoughts && s.screen === 'game')
+  // During the vote: who this fruit is pointing at, and how many are pointing at it.
+  const pointAt = useSim((s) => s.votes[id])
+  const votesAgainst = useSim((s) => Object.values(s.votes).filter((target) => target === id).length)
   const armed = useSim((s) => s.attack?.attackerId === id)
   const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
   // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
@@ -182,7 +185,7 @@ export default function Fruit({ id }: { id: string }) {
       setChop(null)
       return
     }
-    if (useSim.getState().phase !== 'vote') {
+    if (useSim.getState().chopped[id]) {
       const p = b.translation()
       const q = b.rotation()
       setChop({ position: [p.x, p.y, p.z], quaternion: [q.x, q.y, q.z, q.w] })
@@ -272,8 +275,8 @@ export default function Fruit({ id }: { id: string }) {
     if (walking) {
       v.tmp.copy(v.want)
     } else {
-      const focusId = sim.focusId !== id ? sim.focusId : null
-      const focus = followPos ?? (focusId ? fruitPositions.get(focusId) : undefined)
+      const lookId = sim.lookAt[id] ?? (sim.focusId !== id ? sim.focusId : null)
+      const focus = followPos ?? (lookId ? fruitPositions.get(lookId) : undefined)
       v.tmp.set((focus?.x ?? 0) - t.x, 0, (focus?.z ?? 0) - t.z)
     }
     if (v.tmp.lengthSq() > 1e-4) {
@@ -349,6 +352,13 @@ export default function Fruit({ id }: { id: string }) {
         v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
         arm[0].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, 0.26).addScaledVector(UP, 0.05), 0.5)
         arm[1].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, striking ? 0.6 : 0.4).addScaledVector(UP, striking ? 0.05 : 0.5), 0.5)
+      }
+      // Voting: the right arm points straight at the chosen fruit.
+      const pointed = alive && i === 1 && pointAt ? fruitPositions.get(pointAt) : undefined
+      if (pointed) {
+        v.tmp.subVectors(pointed, v.shoulder).setY(0).normalize()
+        arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, ARM_SEGMENT).addScaledVector(UP, 0.06), 0.6)
+        arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, ARM_SEGMENT * 2).addScaledVector(UP, 0.12), 0.6)
       }
       for (let pass = 0; pass < 3; pass++) {
         arm.forEach((point, n) => {
@@ -514,8 +524,24 @@ export default function Fruit({ id }: { id: string }) {
       <group ref={overlay}>
         <Html center zIndexRange={[10, 0]}>
           <div className={`fruit-tag${alive ? '' : ' dead'}`}>
-            {speechText && alive && <div className={`bubble${whispering ? ' whisper' : ''}`}><RichText text={speechText} /></div>}
-            {thinking && !speechText && <div className="bubble thinking"><i /><i /><i /></div>}
+            {speechText && alive && (
+              <div className="bubble">
+                <RichText text={speechText} />
+              </div>
+            )}
+            {thinking && !speechText && (
+              <div className="bubble thinking">
+                <i />
+                <i />
+                <i />
+              </div>
+            )}
+            {showThought && alive && fruit.thought && !speechText && !thinking && (
+              <div className="bubble thought">
+                <RichText text={fruit.thought} />
+              </div>
+            )}
+            {votesAgainst > 0 && alive && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
             <div className="name">
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}

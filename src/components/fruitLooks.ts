@@ -14,4 +14,11 @@ export const LOOKS: Record<FruitKind, { color: string; flesh: string; scale: [nu
   kiwi: { color: '#8a6a3b', flesh: '#9bd45a', scale: [0.88, 1.05, 0.88] },
 }
 
-export const ROLE_TAG: Record<Role, string> = { werewolf: 'Wolf', villager: 'Villager', seer: 'Seer', doctor: 'Doctor' }
+export const ROLE_TAG: Record<Role, string> = {
+  werewolf: 'Wolf',
+  villager: 'Villager',
+  seer: 'Seer',
+  doctor: 'Doctor',
+  hunter: 'Hunter',
+  jester: 'Jester',
+}

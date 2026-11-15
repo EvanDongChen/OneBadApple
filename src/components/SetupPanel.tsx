@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { startGame } from '../sim/engine'
 import { listGeminiModels } from '../sim/geminiBrain'
 import { unlockAudio } from '../sim/sfx'
-import { MAX_FRUITS, MIN_FRUITS, useSim } from '../sim/store'
+import { MAX_FRUITS, MIN_FRUITS, maxWolves, useSim } from '../sim/store'
 import { FRUIT_KINDS, TRAIT_KEYS } from '../sim/types'
 import type { FruitKind } from '../sim/types'
 import { LOOKS } from './fruitLooks'
@@ -18,7 +18,13 @@ const TRAIT_LABELS: Record<(typeof TRAIT_KEYS)[number], string> = {
 export default function SetupPanel() {
   const roster = useSim((s) => s.roster)
   const settings = useSim((s) => s.settings)
-  const { updateFruit, addFruit, removeFruit, randomizeRoster, setSettings } = useSim.getState()
+  const { updateFruit, addFruit, removeFruit, randomizeRoster, setSettings, setRules } = useSim.getState()
+  const { rules } = settings
+  const wolfLimit = maxWolves(roster.length)
+  const wolves = Math.min(rules.wolves, wolfLimit)
+  // Special roles that won't fit once the wolves are seated are dropped, last ticked first.
+  const specials = (['seer', 'doctor', 'hunter', 'jester'] as const).filter((r) => rules[r])
+  const dropped = specials.slice(Math.max(0, roster.length - wolves))
   const [openId, setOpenId] = useState<string | null>(roster[0]?.id ?? null)
   const [models, setModels] = useState<string[]>([])
   const [modelStatus, setModelStatus] = useState('')
@@ -108,6 +114,47 @@ export default function SetupPanel() {
             </div>
           </>
         )}
+      </section>
+
+      <section>
+        <h2>House rules</h2>
+        <div className="row">
+          <label>
+            Werewolves
+            <select value={wolves} onChange={(e) => setRules({ wolves: Number(e.target.value) })}>
+              {Array.from({ length: wolfLimit }, (_, i) => (
+                <option key={i + 1}>{i + 1}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Rounds of talk per day
+            <select value={rules.rounds} onChange={(e) => setRules({ rounds: Number(e.target.value) })}>
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="checks">
+          {(
+            [
+              ['seer', 'Seer', 'Learns one fruit\'s side each night'],
+              ['doctor', 'Doctor', 'Saves one fruit each night'],
+              ['hunter', 'Hunter', 'Takes someone down when it dies'],
+              ['jester', 'Jester', 'Wins alone if voted out'],
+            ] as const
+          ).map(([key, label, hint]) => (
+            <label key={key} className="check">
+              <input type="checkbox" checked={rules[key]} onChange={(e) => setRules({ [key]: e.target.checked })} />
+              <span>
+                <b>{label}</b>
+                <small>{hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+        {dropped.length > 0 && <p className="muted">Not enough fruits for: {dropped.join(', ')}. Add more villagers or untick a role.</p>}
       </section>
 
       <section>
