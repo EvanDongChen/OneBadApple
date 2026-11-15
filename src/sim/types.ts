@@ -12,9 +12,11 @@ export const FRUIT_KINDS = [
 ] as const
 export type FruitKind = (typeof FRUIT_KINDS)[number]
 
-export type Role = 'werewolf' | 'villager' | 'seer' | 'doctor'
+export type Role = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'hunter' | 'jester'
 
-export type Phase = 'setup' | 'night' | 'dawn' | 'mingle' | 'discussion' | 'vote' | 'over'
+export type Phase = 'setup' | 'night' | 'dawn' | 'talk' | 'vote' | 'over'
+
+export type Winner = 'village' | 'werewolves' | 'jester'
 
 /** Personality sliders, each 0..1, plus a free-text quirk. */
 export interface Traits {
@@ -26,6 +28,19 @@ export interface Traits {
 }
 
 export const TRAIT_KEYS = ['aggression', 'honesty', 'talkativeness', 'suspicion'] as const
+
+/** Game options chosen on the setup screen. */
+export interface Rules {
+  wolves: number
+  seer: boolean
+  doctor: boolean
+  /** Takes one fruit down with it when it dies. */
+  hunter: boolean
+  /** Wins alone if the village votes it out. */
+  jester: boolean
+  /** How many rounds of small conversations happen each day before the vote. */
+  rounds: number
+}
 
 /** What the user edits on the setup screen. */
 export interface FruitDef {
@@ -47,14 +62,16 @@ export interface Feeling {
 export interface FruitState extends FruitDef {
   role: Role
   alive: boolean
-  /** Spot in front of its hut. */
+  /** Its own spot at the edge of the stage. */
   home: [number, number]
-  /** Spot at the meeting circle. */
+  /** Its spot at the meeting circle, used for the vote. */
   seat: [number, number]
   /** Character sheet, written once at game start and reused in every prompt. */
   persona: string
-  /** Private facts only this fruit knows (role info, night results, whispers). */
+  /** Private facts only this fruit knows (role info, night results). */
   memory: string[]
+  /** Recent lines from conversations this fruit was part of, oldest first. */
+  heard: string[]
   /** What it is privately thinking right now. Rewritten every night. */
   thought: string
   /** How it feels about each other fruit, keyed by their id. Rewritten every night. */
@@ -62,17 +79,20 @@ export interface FruitState extends FruitDef {
 }
 
 export interface LogEntry {
-  kind: 'say' | 'whisper' | 'system' | 'vote'
+  kind: 'say' | 'system' | 'vote'
   name?: string
+  /** Who a conversation line was said to. */
+  to?: string
   text: string
 }
 
 /** The whole world, handed to a brain for one batched decision. */
 export interface WorldView {
   day: number
+  rules: Rules
   /** Every fruit, living and dead. */
   fruits: FruitState[]
-  /** Recent public events and speech, oldest first. */
+  /** Recent events everyone knows (deaths, votes), oldest first. Conversations are not public. */
   publicLog: string[]
 }
 
@@ -84,16 +104,22 @@ export interface NightScript {
   protect: string | null
   /** Who the seer inspects, if there is a seer. */
   inspect: string | null
+  /** Who the hunter will take down with it if it dies before the next night. */
+  revenge: string | null
   /** Each living fruit's updated inner state. */
   minds: { id: string; thought: string; feelings: { about: string; trust: number; note: string }[] }[]
 }
 
+/** A few fruits talking among themselves. Only the members hear it. */
+export interface Conversation {
+  members: string[]
+  lines: { id: string; say: string }[]
+}
+
 /** Everything that happens in one day, decided in a single batch. */
 export interface DayScript {
-  /** Morning: who each fruit walks up to and what it says privately. */
-  plans: { id: string; approach: string; line: string }[]
-  /** The campfire meeting, in speaking order. */
-  discussion: { id: string; say: string }[]
+  /** Each round splits the living fruits into small groups that talk at the same time. */
+  rounds: Conversation[][]
   /** One vote per living fruit. */
   votes: { id: string; target: string; reason: string }[]
 }

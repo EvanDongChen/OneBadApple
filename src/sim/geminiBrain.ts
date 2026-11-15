@@ -1,8 +1,8 @@
 import { MockBrain } from './mockBrain'
-import type { Brain, DayScript, FruitState, NightScript, WorldView } from './types'
+import type { Brain, Conversation, DayScript, FruitState, NightScript, Role, WorldView } from './types'
 
 const API = 'https://generativelanguage.googleapis.com/v1beta'
-const REQUEST_TIMEOUT_MS = 45000
+const REQUEST_TIMEOUT_MS = 60000
 const MAX_ATTEMPTS = 2
 
 export interface GeminiOptions {
@@ -29,11 +29,13 @@ export async function listGeminiModels(apiKey: string): Promise<string[]> {
     .filter((n) => n.startsWith('gemini') && !/tts|image|transcribe|computer|robotics|omni/.test(n))
 }
 
-const ROLE_BRIEF: Record<string, string> = {
-  werewolf: 'WEREWOLF. Kills a villager each night. By day it blends in, deflects suspicion and gets innocents voted out. It never admits what it is.',
+const ROLE_BRIEF: Record<Role, string> = {
+  werewolf: 'WEREWOLF. Kills a fruit each night. By day it blends in, deflects suspicion and gets innocents voted out. It never admits what it is.',
   villager: 'VILLAGER. No powers. Wants to find the werewolves and vote them out.',
   seer: 'SEER. Each night learns whether one fruit is a werewolf. Wants to use that, but revealing itself makes it a target.',
   doctor: 'DOCTOR. Each night protects one fruit from being killed. Revealing itself makes it a target.',
+  hunter: 'HUNTER. On the village side. When it dies, by night or by vote, it takes one fruit of its choice down with it.',
+  jester: 'JESTER. On nobody\'s side. It wins alone, and the game ends, if the village votes it out, so it tries to seem suspicious without being obvious about wanting it. Being killed at night is a loss for it.',
 }
 
 /** A fruit's character sheet. Written once at game start and stored on the fruit. */
@@ -54,9 +56,9 @@ export function buildPersona(fruit: Pick<FruitState, 'name' | 'kind' | 'role' | 
 function systemPrompt(world: WorldView): string {
   return [
     'You are the game master and voice actor for a village of fruits playing Werewolf (Mafia) for real. You play EVERY fruit, each strictly from its own point of view.',
-    'Rules: the village wins when every werewolf is dead; the werewolves win when they are at least half of the living fruits. Each night the werewolves kill one fruit, the doctor protects one, the seer inspects one. Each day the fruits talk, then vote one fruit out.',
-    'Secrecy is the whole game. A fruit only knows the PUBLIC log and its own PRIVATE section. Never let a fruit act on, hint at or repeat anything from another fruit\'s private section. Villagers do not know who the werewolf is and should sometimes be wrong.',
-    'Each fruit\'s personality must drive both what it decides and how it talks: aggressive fruits attack and hold grudges, dishonest ones lie and invent claims, suspicious ones accuse on thin evidence, talkative ones speak more and longer. Use each quirk. The odd fruit pun is welcome.',
+    'Rules: the village wins when every werewolf is dead; the werewolves win when they are at least half of the living fruits. Each night the werewolves kill one fruit, the doctor protects one, the seer inspects one. Each day the fruits talk in small private groups, then everyone votes one fruit out in public.',
+    'Secrecy is the whole game. A fruit only knows the PUBLIC log, its own PRIVATE section and the conversations it was in. Never let a fruit act on, hint at or repeat anything it could not know. News travels only when a fruit chooses to pass it on, and it may be passed on wrongly or as a lie. Villagers do not know who the werewolf is and should sometimes be wrong.',
+    'Each fruit\'s personality must drive both what it decides and how it talks: aggressive fruits attack and hold grudges, dishonest ones lie and invent claims, suspicious ones accuse on thin evidence, talkative ones say more. Use each quirk. The odd fruit pun is welcome.',
     'Anything said out loud is one or two short sentences, at most 25 words.',
     'Refer to fruits by name exactly as written. Reply with JSON matching the schema and nothing else.',
     'THE CAST (permanent character sheets):',
@@ -78,6 +80,7 @@ function worldState(world: WorldView): string {
       f.memory.length ? `Knows: ${f.memory.join(' | ')}` : 'Knows: nothing special.',
       f.thought ? `Current thought: ${f.thought}` : '',
       feelings.length ? `Trust in others (-5 to +5): ${feelings.join(', ')}` : '',
+      f.heard.length ? `Conversations it was in (oldest first):\n${f.heard.slice(-18).join('\n')}` : '',
     ]
       .filter(Boolean)
       .join('\n')
@@ -99,12 +102,12 @@ const NIGHT_SCHEMA = obj({
   kill: STR,
   protect: STR,
   inspect: STR,
+  revenge: STR,
   minds: list(obj({ name: STR, thought: STR, feelings: list(obj({ about: STR, trust: { type: 'INTEGER' }, note: STR })) })),
 })
 
 const DAY_SCHEMA = obj({
-  plans: list(obj({ name: STR, approach: STR, line: STR })),
-  discussion: list(obj({ name: STR, say: STR })),
+  rounds: list(obj({ groups: list(obj({ members: list(STR), lines: list(obj({ name: STR, say: STR })) })) })),
   votes: list(obj({ name: STR, target: STR, reason: STR })),
 })
 
@@ -113,7 +116,7 @@ type Json = Record<string, unknown>
 /**
  * The whole village's decisions come from Gemini, two batched calls per game day:
  * one for the night (actions plus every fruit's updated thoughts and feelings) and
- * one for the day (morning chats, the full meeting and every vote).
+ * one for the day (every small conversation in every round, then every vote).
  * Anything missing or illegal in a reply is filled in by the no-AI rules.
  */
 export class GeminiBrain implements Brain {
@@ -213,6 +216,7 @@ export class GeminiBrain implements Brain {
     const backup = await this.fallback.playNight(world)
     const doctor = living.find((f) => f.role === 'doctor')
     const seer = living.find((f) => f.role === 'seer')
+    const hunter = living.find((f) => f.role === 'hunter')
     const prey = living.filter((f) => f.role !== 'werewolf')
 
     const out = await this.ask(
@@ -222,6 +226,7 @@ export class GeminiBrain implements Brain {
         `- "kill": the werewolves' victim. Options: ${prey.map((f) => f.name).join(', ')}.`,
         doctor ? `- "protect": who ${doctor.name} (doctor) guards; may be itself.` : '- "protect": "" (there is no doctor).',
         seer ? `- "inspect": who ${seer.name} (seer) inspects; not itself, ideally someone not inspected before.` : '- "inspect": "" (there is no seer).',
+        hunter ? `- "revenge": who ${hunter.name} (hunter) will take down with it if it dies before the next night; not itself.` : '- "revenge": "" (there is no hunter).',
         '- "minds": for EVERY living fruit, its updated inner state after everything so far: "thought" is one private sentence (max 20 words) in its own voice about what it plans or fears; "feelings" has one entry for EVERY other living fruit with "trust" from -5 (certain they are a werewolf) to +5 (total trust) and a "note" of at most 8 words giving the reason. Base feelings on what that fruit has actually seen and heard, coloured by its personality.',
       ].join('\n'),
       NIGHT_SCHEMA,
@@ -244,41 +249,58 @@ export class GeminiBrain implements Brain {
       kill: this.resolve(out.kill, prey) ?? backup.kill,
       protect: doctor ? (this.resolve(out.protect, living) ?? backup.protect) : null,
       inspect: seer ? (this.resolve(out.inspect, living.filter((f) => f.id !== seer.id)) ?? backup.inspect) : null,
+      revenge: hunter ? (this.resolve(out.revenge, living.filter((f) => f.id !== hunter.id)) ?? backup.revenge) : null,
       // Any fruit Gemini skipped keeps the rule-based mind.
       minds: living.map((f) => minds.find((m) => m.id === f.id && m.feelings.length) ?? backup.minds.find((m) => m.id === f.id)!),
     }
   }
 
+  /**
+   * Make one round legal: every living fruit in exactly one group, every group has
+   * at least two members and two lines. Returns null if nothing usable is left.
+   */
+  private repairRound(row: Json, living: FruitState[]): Conversation[] | null {
+    const placed = new Set<string>()
+    const groups: Conversation[] = []
+    for (const group of this.rows(row.groups)) {
+      const members = (Array.isArray(group.members) ? group.members : [])
+        .map((m) => this.resolve(m, living))
+        .filter((id): id is string => !!id && !placed.has(id))
+        .filter((id, i, all) => all.indexOf(id) === i)
+      const lines = this.rows(group.lines).flatMap((line) => {
+        const id = this.resolve(line.name, living)
+        const say = this.text(line.say)
+        return id && members.includes(id) && say ? [{ id, say }] : []
+      })
+      if (members.length < 2 || lines.length < 2) continue
+      members.forEach((id) => placed.add(id))
+      groups.push({ members, lines: lines.slice(0, 8) })
+    }
+    if (!groups.length) return null
+    // Anyone left out stands with the smallest group and listens.
+    for (const fruit of living) {
+      if (!placed.has(fruit.id)) groups.reduce((a, b) => (b.members.length < a.members.length ? b : a)).members.push(fruit.id)
+    }
+    return groups
+  }
+
   async playDay(world: WorldView): Promise<DayScript> {
     const living = world.fruits.filter((f) => f.alive)
     const backup = await this.fallback.playDay(world)
-    const turns = Math.max(5, Math.min(12, Math.round(living.length * 1.6)))
+    const { rounds } = world.rules
 
     const out = await this.ask(
       world,
       [
         `It is day ${world.day}. Write the whole day in order:`,
-        '- "plans": the morning. For EVERY living fruit, the ONE other living fruit it chooses to walk up to ("approach") and the "line" it says to them privately: probing, warning, allying or lying, as its feelings and personality dictate.',
-        `- "discussion": the village meeting, about ${turns} lines in speaking order. Fruits react to the lines before them: accuse, defend, bluff, change the subject. Chattier fruits speak more; quiet ones may speak once or not at all. Private morning lines were only heard by the fruit they were said to.`,
-        '- "votes": after the meeting, EVERY living fruit votes for ONE other living fruit ("target"), with a short "reason" said out loud. Votes must follow from each fruit\'s own feelings and what was said in the discussion you just wrote.',
+        `- "rounds": exactly ${rounds} round${rounds > 1 ? 's' : ''} of talking. In each round the living fruits split into "groups" of two (one group of three if the number is odd), so that EVERY living fruit is in exactly one group. Each fruit goes to whoever it most wants to talk to, given its feelings and personality (to confront a suspect, sound out a friend, spread a rumour, tell a lie), and should change partner between rounds. Each group has "members" and its own private conversation in "lines": about 4 lines for a pair, 5 for a three, speakers taking turns and reacting to each other. Only a group's members hear its lines. What a fruit learns in one round it can repeat, twist or hide in the next.`,
+        '- "votes": after the talking, EVERY living fruit votes in public for ONE other living fruit ("target"), with a short "reason" said out loud. Each vote must follow from that fruit\'s own feelings and only the conversations it was in.',
       ].join('\n'),
       DAY_SCHEMA,
     )
     if (!out) return backup
 
-    const plans = this.rows(out.plans).flatMap((row) => {
-      const id = this.resolve(row.name, living)
-      const approach = this.resolve(row.approach, living)
-      const line = this.text(row.line)
-      return id && approach && approach !== id && line ? [{ id, approach, line }] : []
-    })
-    const discussion = this.rows(out.discussion)
-      .flatMap((row) => {
-        const id = this.resolve(row.name, living)
-        const say = this.text(row.say)
-        return id && say ? [{ id, say }] : []
-      })
-      .slice(0, 14)
+    const written = this.rows(out.rounds)
     const votes = this.rows(out.votes).flatMap((row) => {
       const id = this.resolve(row.name, living)
       const target = this.resolve(row.target, living)
@@ -286,8 +308,7 @@ export class GeminiBrain implements Brain {
     })
 
     return {
-      plans: living.map((f) => plans.find((p) => p.id === f.id) ?? backup.plans.find((p) => p.id === f.id)!),
-      discussion: discussion.length >= 3 ? discussion : backup.discussion,
+      rounds: Array.from({ length: rounds }, (_, r) => (written[r] && this.repairRound(written[r], living)) || backup.rounds[r]),
       votes: living.map((f) => votes.find((v) => v.id === f.id) ?? backup.votes.find((v) => v.id === f.id)!),
     }
   }

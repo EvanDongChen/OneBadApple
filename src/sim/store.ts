@@ -1,11 +1,10 @@
 import { create } from 'zustand'
 import { Vector3 } from 'three'
 import { FRUIT_KINDS } from './types'
-import type { FruitDef, FruitState, LogEntry, Phase, Traits } from './types'
+import type { FruitDef, FruitState, LogEntry, Phase, Rules, Traits, Winner } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
-
 const HOME_RING = 10.4
 const SEAT_RING = 3.8
 
@@ -28,9 +27,12 @@ export interface Settings {
   requestsPerMinute: number
   maxCalls: number
   muted: boolean
+  rules: Rules
 }
 
 const SETTINGS_KEY = 'onebadapple.settings'
+
+const DEFAULT_RULES: Rules = { wolves: 1, seer: true, doctor: true, hunter: false, jester: false, rounds: 2 }
 
 function loadSettings(): Settings {
   // The dev key from .env.local is only read in dev builds; production users paste their own.
@@ -42,10 +44,12 @@ function loadSettings(): Settings {
     requestsPerMinute: 15,
     maxCalls: 80,
     muted: false,
+    rules: DEFAULT_RULES,
   }
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null')
-    return saved ? { ...defaults, ...saved, apiKey: saved.apiKey || devKey } : defaults
+    if (!saved) return defaults
+    return { ...defaults, ...saved, apiKey: saved.apiKey || devKey, rules: { ...DEFAULT_RULES, ...saved.rules } }
   } catch {
     return defaults
   }
@@ -57,6 +61,11 @@ function saveSettings(settings: Settings) {
   } catch {
     // Storage can be unavailable (private windows); the settings just won't persist.
   }
+}
+
+/** Most wolves a village of this size can hold while still being outnumbered at the start. */
+export function maxWolves(fruitCount: number) {
+  return Math.max(1, Math.floor((fruitCount - 1) / 2))
 }
 
 function randomTraits(): Traits {
@@ -88,7 +97,7 @@ function ring(i: number, n: number, radius: number): [number, number] {
   return [Math.cos(angle) * radius, Math.sin(angle) * radius]
 }
 
-/** Place each fruit's home (by its hut) and campfire seat around the village. */
+/** Place each fruit's home spot and meeting-circle seat around the stage. */
 export function layout(roster: FruitDef[]): FruitState[] {
   return roster.map((def, i) => ({
     ...def,
@@ -98,6 +107,7 @@ export function layout(roster: FruitDef[]): FruitState[] {
     seat: ring(i, roster.length, SEAT_RING),
     persona: '',
     memory: [],
+    heard: [],
     thought: '',
     feelings: {},
   }))
@@ -113,22 +123,29 @@ export interface SimState {
   fruits: FruitState[]
   phase: Phase
   day: number
-  winner: 'village' | 'werewolves' | null
+  winner: Winner | null
   /** Where each fruit is walking to. */
   targets: Record<string, [number, number]>
   /** Fruits currently chasing another fruit instead of a fixed target. */
   follow: Record<string, string | undefined>
+  /** Who each fruit turns to face while standing: its conversation partner. */
+  lookAt: Record<string, string | undefined>
   speech: Record<string, string | undefined>
   thinking: Record<string, boolean | undefined>
   /** The night attack in progress: the wolf carries a knife, and lunges when `striking`. */
   attack: { attackerId: string; victimId: string; striking: boolean } | null
-  /** Who everyone turns to look at. */
+  /** Fruits that died by the knife and fall apart in slices (others are flung whole). */
+  chopped: Record<string, boolean | undefined>
+  /** Who everyone turns to look at when they have no partner. */
   focusId: string | null
+  /** Ballots cast so far this vote: voter id to target id. */
   votes: Record<string, string>
   log: LogEntry[]
   paused: boolean
   speed: number
   revealRoles: boolean
+  /** Show every fruit's private thought floating over its head. */
+  showThoughts: boolean
   calls: number
   settings: Settings
 
@@ -137,6 +154,7 @@ export interface SimState {
   removeFruit(id: string): void
   randomizeRoster(): void
   setSettings(patch: Partial<Settings>): void
+  setRules(patch: Partial<Rules>): void
   addLog(entry: LogEntry): void
   backToSetup(): void
 }
@@ -154,10 +172,12 @@ function setupState(roster: FruitDef[]) {
     winner: null,
     targets: seats(fruits),
     follow: {},
+    lookAt: {},
     speech: {},
     thinking: {},
-    focusId: null,
     attack: null,
+    chopped: {},
+    focusId: null,
     votes: {},
     paused: false,
   }
@@ -168,6 +188,7 @@ export const useSim = create<SimState>((set, get) => ({
   log: [],
   speed: 1,
   revealRoles: false,
+  showThoughts: false,
   calls: 0,
   settings: loadSettings(),
 
@@ -191,7 +212,8 @@ export const useSim = create<SimState>((set, get) => ({
     saveSettings(settings)
     set({ settings })
   },
-  addLog: (entry) => set((s) => ({ log: [...s.log, entry].slice(-200) })),
+  setRules: (patch) => get().setSettings({ rules: { ...get().settings.rules, ...patch } }),
+  addLog: (entry) => set((s) => ({ log: [...s.log, entry].slice(-300) })),
   backToSetup: () => set((s) => ({ ...setupState(s.roster), revealRoles: false })),
 }))
 

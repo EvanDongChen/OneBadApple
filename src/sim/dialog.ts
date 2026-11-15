@@ -147,7 +147,7 @@ export const IDLE = [
   'Could we maybe just all agree not to be wolves?',
   "I'm watching. That's all I'll say.",
   'Whoever it is, they are standing right here listening.',
-  'The fire feels colder today.',
+  'The village feels colder today.',
   "I don't like any of this.",
   'Talk it through. Someone will slip.',
   'We are running out of fruits to be wrong about.',
@@ -195,7 +195,7 @@ export const CONFRONT = [
   'Where were you last night, {x}?',
   "Don't think I haven't noticed, {x}.",
   'You and me are going to have a problem, {x}.',
-  "Give me one reason not to name you at the fire, {x}.",
+  "Give me one reason not to name you at the vote, {x}.",
   'I heard footsteps by your hut, {x}. Explain.',
   "You're sweating, {x}. Fruits don't sweat.",
   'I know what you are, {x}.',
@@ -233,7 +233,7 @@ export const ALLY = [
   "Let's look out for each other, {x}.",
   "I'm glad you're still here, {x}.",
   "If you hear anything, {x}, tell me first.",
-  'Stay close to me at the fire, {x}.',
+  'Stay close to me at the vote, {x}.',
   "I don't know who it is, {x}, but I know it's not you.",
   "We'll get through this, {x}. Probably.",
   "You sleep all right, {x}? I didn't.",
@@ -318,4 +318,54 @@ export const THOUGHT_VILLAGER = [
   "If I'm wrong about {x}, we are all jam.",
   'Watch {x}. Just watch.',
   'Something about {x} keeps me up at night.',
+]
+
+/** Conversation: reacting to gossip about {x} without taking a side. */
+export const UNSURE = [
+  "Hm. I hadn't thought about {x} like that.",
+  "Maybe. I'd want to see more before I point at {x}.",
+  "{x}? I don't know. Could be anyone.",
+  "I'll keep an eye on {x}, then.",
+  "You might be onto something with {x}. Or not.",
+  "I've no quarrel with {x}, but I'm listening.",
+  "That's a big thing to say about {x}.",
+  "Let's see how {x} votes. That'll tell us.",
+]
+
+/** Conversation: warm replies with no accusation in them. */
+export const SMALL_TALK = [
+  'Thanks. I needed to hear that.',
+  'Same to you. Stay safe tonight.',
+  "Let's just get through today.",
+  "I'm glad someone's still friendly.",
+  'Keep your door bolted.',
+  "If I hear anything, you'll be the first to know.",
+  'We should talk again before the vote.',
+  "I've got your back. For now.",
+  'Did you sleep at all? I did not.',
+  "Careful who you say that to.",
+]
+
+/** The jester wants to be voted out, so it acts as shifty as it can. */
+export const JESTER = [
+  'Maybe it IS me. Who can say? Not me. Or can I?',
+  "I wouldn't vote for me. Unless you wanted to. You could.",
+  'Funny how I was nowhere near my hut last night.',
+  'Awoo. Sorry. Something in my throat.',
+  "I'm definitely not the wolf. Definitely. Stop looking at my teeth.",
+  'If I were you, I would be very suspicious of me.',
+  'What a lovely night for a murder. I mean, a walk.',
+  "Don't ask where I was. You won't like the answer.",
+  'I have nothing to hide. Except the thing I am hiding.',
+  'Has anyone seen my other knife? My ONLY knife. My no knife.',
+  'You can trust me as far as you can throw me. Go on. Throw me.',
+  'I slept terribly. All that howling I was doing. Hearing.',
+]
+
+/** The hunter's last words as it takes {x} down with it. */
+export const HUNTER_SHOT = [
+  "If I'm going, {x} is coming with me.",
+  'One last shot. This one is for you, {x}.',
+  "I had {x} marked from the start.",
+  'See you in the compost, {x}.',
 ]
