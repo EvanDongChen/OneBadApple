@@ -45,9 +45,34 @@ const LOOKS: Record<FruitKind, { color: string; scale: [number, number, number] 
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
 
-// Mouth: vertical scale when shut, and how far it flaps open while talking.
-const MOUTH_CLOSED = 0.18
-const MOUTH_FLAP = 1.1
+// Face: tiny dot eyes and a flat line mouth that pops into an "o" while talking.
+const EYE_RADIUS = 0.035
+const EYE_SPREAD = 0.085
+const MOUTH_LINE: [number, number] = [1, 0.12] // x, y scale when shut
+const MOUTH_ROUND: [number, number] = [0.6, 0.8] // x, y scale when fully open
+
+// Arms: two-segment floppy sticks, simulated as a damped verlet chain.
+const ARM_SEGMENT = 0.3
+const ARM_DRAG = 0.94
+const ARM_GRAVITY = 12
+const LIMB_COLOR = '#151515'
+
+const limbDir = new Vector3()
+
+/** Stretch a unit-height cylinder so it spans from a to b. */
+function placeLimb(mesh: Mesh | null, a: Vector3, b: Vector3) {
+  if (!mesh) return
+  limbDir.subVectors(b, a)
+  const length = limbDir.length()
+  mesh.position.copy(a).addScaledVector(limbDir, 0.5)
+  mesh.quaternion.setFromUnitVectors(UP, limbDir.divideScalar(length || 1))
+  mesh.scale.set(1, length, 1)
+}
+
+interface ArmPoint {
+  pos: Vector3
+  prev: Vector3
+}
 
 interface Foot {
   pos: Vector3
@@ -66,7 +91,12 @@ export default function Fruit({ def }: { def: FruitDef }) {
   const visual = useRef<Group>(null)
   const overlay = useRef<Group>(null)
   const mouth = useRef<Mesh>(null)
-  const mouthOpen = useRef(MOUTH_CLOSED)
+  const mouthOpen = useRef(0)
+  const armMeshes = useRef<(Mesh | null)[]>([null, null, null, null])
+  // Per arm: [elbow, hand]. Seeded on the first frame once the body position is known.
+  const arms = useRef<ArmPoint[][] | null>(null)
+  // Slightly uneven eyes make the face derpier.
+  const eyeOffsets = useMemo(() => [(Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.04], [])
   const legMeshes = useRef<(Mesh | null)[]>([null, null])
   const footMeshes = useRef<(Mesh | null)[]>([null, null])
   const feet = useRef<Foot[]>([
@@ -91,6 +121,7 @@ export default function Fruit({ def }: { def: FruitDef }) {
       torque: new Vector3(),
       tmp: new Vector3(),
       hip: new Vector3(),
+      shoulder: new Vector3(),
       quat: new Quaternion(),
     }),
     [],
@@ -194,15 +225,54 @@ export default function Fruit({ def }: { def: FruitDef }) {
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
 
-    // Mouth flaps while talking: two mixed sines so it doesn't look metronomic.
+    // Mouth: flat line at rest, flaps toward a round "o" while talking.
+    // Two mixed sines so it doesn't look metronomic.
     if (mouth.current) {
       const time = state.clock.elapsedTime
-      const target = speechText
-        ? MOUTH_CLOSED + MOUTH_FLAP * Math.abs(Math.sin(time * 13) * 0.65 + Math.sin(time * 7.3) * 0.35)
-        : MOUTH_CLOSED
+      const target = speechText ? Math.abs(Math.sin(time * 13) * 0.65 + Math.sin(time * 7.3) * 0.35) : 0
       mouthOpen.current += (target - mouthOpen.current) * Math.min(1, delta * 25)
-      mouth.current.scale.set(1, mouthOpen.current, 0.3)
+      const o = mouthOpen.current
+      mouth.current.scale.set(
+        MOUTH_LINE[0] + (MOUTH_ROUND[0] - MOUTH_LINE[0]) * o,
+        MOUTH_LINE[1] + (MOUTH_ROUND[1] - MOUTH_LINE[1]) * o,
+        0.2,
+      )
     }
+
+    // Floppy arms: verlet points hanging off each shoulder, dragged around by the body.
+    const dt = Math.min(delta, 1 / 30)
+    if (!arms.current) {
+      arms.current = [-1, 1].map(() =>
+        [1, 2].map((n) => {
+          const pos = v.pos.clone().setY(v.pos.y - ARM_SEGMENT * n)
+          return { pos, prev: pos.clone() }
+        }),
+      )
+    }
+    arms.current.forEach((arm, i) => {
+      const side = i === 0 ? -1 : 1
+      v.shoulder.set(side * RADIUS * look.scale[0] * 0.93, 0, 0).applyQuaternion(v.quat).add(v.pos)
+      for (const point of arm) {
+        v.tmp.subVectors(point.pos, point.prev).multiplyScalar(ARM_DRAG)
+        point.prev.copy(point.pos)
+        point.pos.add(v.tmp)
+        point.pos.y -= ARM_GRAVITY * dt * dt
+      }
+      for (let pass = 0; pass < 3; pass++) {
+        arm.forEach((point, n) => {
+          const anchor = n === 0 ? v.shoulder : arm[0].pos
+          v.tmp.subVectors(point.pos, anchor)
+          if (v.tmp.lengthSq() < 1e-8) v.tmp.set(side, -1, 0)
+          point.pos.copy(anchor).addScaledVector(v.tmp.normalize(), ARM_SEGMENT)
+          // Keep the arm outside the body and above the ground.
+          v.tmp.subVectors(point.pos, v.pos)
+          if (v.tmp.length() < RADIUS * 1.06) point.pos.copy(v.pos).addScaledVector(v.tmp.normalize(), RADIUS * 1.06)
+          if (point.pos.y < 0.03) point.pos.y = 0.03
+        })
+      }
+      placeLimb(armMeshes.current[i * 2], v.shoulder, arm[0].pos)
+      placeLimb(armMeshes.current[i * 2 + 1], arm[0].pos, arm[1].pos)
+    })
 
     // Procedural stepping: a foot stays planted until the body drifts away from it.
     v.fwd.set(0, 0, 1).applyQuaternion(v.quat).setY(0)
@@ -230,16 +300,8 @@ export default function Fruit({ def }: { def: FruitDef }) {
 
       footMeshes.current[i]?.position.copy(foot.pos)
 
-      // Stretch the leg cylinder between hip and foot.
-      const leg = legMeshes.current[i]
-      if (leg) {
-        v.hip.set(side * HIP_SPREAD, -RADIUS * 0.75, 0).applyQuaternion(v.quat).add(v.pos)
-        v.tmp.subVectors(foot.pos, v.hip)
-        const length = v.tmp.length()
-        leg.position.copy(v.hip).addScaledVector(v.tmp, 0.5)
-        leg.quaternion.setFromUnitVectors(UP, v.tmp.divideScalar(length || 1))
-        leg.scale.set(1, length, 1)
-      }
+      v.hip.set(side * HIP_SPREAD, -RADIUS * 0.75, 0).applyQuaternion(v.quat).add(v.pos)
+      placeLimb(legMeshes.current[i], v.hip, foot.pos)
     })
   })
 
@@ -266,15 +328,15 @@ export default function Fruit({ def }: { def: FruitDef }) {
             <sphereGeometry args={[0.14, 12, 8]} />
             <meshStandardMaterial color="#3f9b3a" />
           </mesh>
-          {[-1, 1].map((side) => (
-            <mesh key={side} position={[side * 0.17, 0.12, RADIUS * look.scale[2] * 0.93]}>
-              <sphereGeometry args={[0.06, 12, 12]} />
-              <meshStandardMaterial color="#1b1b1b" roughness={0.2} />
+          {[-1, 1].map((side, i) => (
+            <mesh key={side} position={[side * EYE_SPREAD, 0.08 + eyeOffsets[i], RADIUS * look.scale[2] * 0.97]}>
+              <sphereGeometry args={[EYE_RADIUS, 12, 12]} />
+              <meshBasicMaterial color={LIMB_COLOR} />
             </mesh>
           ))}
-          <mesh ref={mouth} position={[0, -0.1, RADIUS * look.scale[2] * 0.95]} scale={[1, MOUTH_CLOSED, 0.3]}>
-            <sphereGeometry args={[0.11, 16, 12]} />
-            <meshStandardMaterial color="#3b0d12" roughness={0.6} />
+          <mesh ref={mouth} position={[0, -0.05, RADIUS * look.scale[2] * 0.98]} scale={[MOUTH_LINE[0], MOUTH_LINE[1], 0.2]}>
+            <sphereGeometry args={[0.085, 16, 12]} />
+            <meshBasicMaterial color={LIMB_COLOR} />
           </mesh>
         </group>
       </RigidBody>
@@ -282,14 +344,21 @@ export default function Fruit({ def }: { def: FruitDef }) {
       {[0, 1].map((i) => (
         <group key={i}>
           <mesh ref={(m) => void (legMeshes.current[i] = m)} castShadow>
-            <cylinderGeometry args={[0.045, 0.045, 1, 8]} />
-            <meshStandardMaterial color="#3a2a1e" />
+            <cylinderGeometry args={[0.028, 0.028, 1, 8]} />
+            <meshStandardMaterial color={LIMB_COLOR} />
           </mesh>
           <mesh ref={(m) => void (footMeshes.current[i] = m)} castShadow scale={[1, 0.6, 1.4]}>
-            <sphereGeometry args={[0.1, 12, 10]} />
-            <meshStandardMaterial color="#3a2a1e" />
+            <sphereGeometry args={[0.06, 12, 10]} />
+            <meshStandardMaterial color={LIMB_COLOR} />
           </mesh>
         </group>
+      ))}
+
+      {[0, 1, 2, 3].map((i) => (
+        <mesh key={i} ref={(m) => void (armMeshes.current[i] = m)} castShadow>
+          <cylinderGeometry args={[0.024, 0.024, 1, 8]} />
+          <meshStandardMaterial color={LIMB_COLOR} />
+        </mesh>
       ))}
 
       <group ref={overlay}>
