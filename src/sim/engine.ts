@@ -168,7 +168,7 @@ async function say(fruit: FruitState, text: string, entry: Pick<LogEntry, 'kind'
   const duration = 1500 + text.length * 40
   set((s) => ({ speech: { ...s.speech, [fruit.id]: text }, focusId: fruit.id }))
   log({ ...entry, name: fruit.name, text })
-  babble(fruit, get().fruits.findIndex((f) => f.id === fruit.id), duration / get().speed)
+  babble(fruit, get().fruits.findIndex((f) => f.id === fruit.id), text, duration / get().speed)
   await wait(duration, signal)
   set((s) => ({ speech: { ...s.speech, [fruit.id]: undefined } }))
   await wait(250, signal)

@@ -29,34 +29,79 @@ function tone(freq: number, start: number, duration: number, type: OscillatorTyp
   osc.stop(t + duration + 0.02)
 }
 
-/** Each kind of fruit has its own voice: small fruits squeak, big ones rumble, sour ones buzz. */
-const KIND_VOICE: Record<FruitKind, { pitch: number; wave: OscillatorType }> = {
-  apple: { pitch: 300, wave: 'square' },
-  orange: { pitch: 235, wave: 'square' },
-  lemon: { pitch: 430, wave: 'sawtooth' },
-  plum: { pitch: 340, wave: 'triangle' },
-  pear: { pitch: 190, wave: 'triangle' },
-  lime: { pitch: 480, wave: 'sawtooth' },
-  peach: { pitch: 385, wave: 'sine' },
-  blueberry: { pitch: 590, wave: 'triangle' },
-  cherry: { pitch: 680, wave: 'square' },
-  kiwi: { pitch: 265, wave: 'sawtooth' },
+/** Voice pitch for each kind of fruit: small fruits squeak, big ones rumble. */
+const KIND_PITCH: Record<FruitKind, number> = {
+  apple: 290,
+  orange: 235,
+  lemon: 350,
+  plum: 310,
+  pear: 195,
+  lime: 375,
+  peach: 330,
+  blueberry: 420,
+  cherry: 460,
+  kiwi: 260,
 }
-const WAVE_GAIN: Record<OscillatorType, number> = { square: 0.035, sawtooth: 0.03, triangle: 0.075, sine: 0.085, custom: 0.035 }
+
+/** Mouth shapes: the two resonances that make a buzz sound like "ah", "eh", "ee", "oh" or "oo". */
+const VOWELS: Record<string, [number, number]> = {
+  a: [850, 1300],
+  e: [550, 1900],
+  i: [330, 2400],
+  o: [520, 950],
+  u: [360, 800],
+}
+const VOWEL_KEYS = Object.keys(VOWELS)
+
+/** One spoken syllable: a buzz shaped by a vowel's two resonances, with a quick fade in and out. */
+function syllable(pitch: number, start: number, length: number, vowel: [number, number], gain: number) {
+  if (!ctx || useSim.getState().settings.muted) return
+  const t = ctx.currentTime + start
+  const osc = ctx.createOscillator()
+  const amp = ctx.createGain()
+  osc.type = 'sawtooth'
+  osc.frequency.setValueAtTime(pitch * 1.05, t)
+  osc.frequency.exponentialRampToValueAtTime(pitch * 0.95, t + length)
+  amp.gain.setValueAtTime(0.0001, t)
+  amp.gain.linearRampToValueAtTime(gain, t + 0.008)
+  amp.gain.setValueAtTime(gain, t + length * 0.55)
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + length)
+  for (const frequency of vowel) {
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = frequency
+    filter.Q.value = 5
+    osc.connect(filter).connect(amp)
+  }
+  amp.connect(ctx.destination)
+  osc.start(t)
+  osc.stop(t + length + 0.02)
+}
 
 /**
- * Gibberish speech in the speaker's own voice. The kind of fruit sets the pitch and tone,
- * talkative fruits gabble faster, and aggressive ones swing further up and down.
- * `variant` nudges the pitch so two fruits of the same kind still sound different.
+ * Speech as a rapid string of tiny syllables, one per letter of the line, so the gibberish
+ * follows the rhythm of the words: vowels sound like themselves, consonants are shorter and
+ * quieter, spaces and punctuation are pauses, and a question rises at the end.
+ * The kind of fruit sets the pitch, talkative fruits gabble faster, and aggressive ones swing
+ * further up and down. `variant` nudges the pitch so two fruits of the same kind differ.
  */
-export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number, durationMs: number) {
-  const { pitch, wave } = KIND_VOICE[fruit.kind]
-  const base = pitch * (1 + (((variant * 7) % 5) - 2) * 0.035)
-  const gap = 0.135 - fruit.traits.talkativeness * 0.07
-  const swing = 0.12 + fruit.traits.aggression * 0.38
-  const count = Math.min(40, Math.floor(durationMs / 1000 / gap))
-  for (let i = 0; i < count; i++) {
-    tone(base * (1 - swing / 2 + Math.random() * swing), i * gap, gap * 0.75, wave, WAVE_GAIN[wave])
+export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number, text: string, durationMs: number) {
+  const base = KIND_PITCH[fruit.kind] * (1 + (((variant * 7) % 5) - 2) * 0.04)
+  const letters = text.toLowerCase().slice(0, 90)
+  // Finish a little before the bubble closes, however fast the game is running.
+  const gap = Math.min(0.078 - fruit.traits.talkativeness * 0.026, (durationMs / 1000) * 0.85 / Math.max(1, letters.length))
+  const swing = 0.035 + fruit.traits.aggression * 0.05
+  const question = text.trim().endsWith('?')
+  for (let i = 0; i < letters.length; i++) {
+    const letter = letters[i]
+    if (letter < 'a' || letter > 'z') continue
+    const code = letter.charCodeAt(0)
+    const isVowel = letter in VOWELS
+    const vowel = VOWELS[isVowel ? letter : VOWEL_KEYS[code % VOWEL_KEYS.length]]
+    // Each letter always lands on the same note, which is what makes it sound like words.
+    const lift = question && i > letters.length - 8 ? 1 + (i - letters.length + 8) * 0.03 : 1
+    const pitch = base * (1 + ((code % 7) - 3) * swing) * lift
+    syllable(pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, isVowel ? 0.3 : 0.2)
   }
 }
 
