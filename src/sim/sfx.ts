@@ -53,8 +53,11 @@ const VOWELS: Record<string, [number, number]> = {
 }
 const VOWEL_KEYS = Object.keys(VOWELS)
 
+/** How many fruits are speaking right now. */
+let talking = 0
+
 /** One spoken syllable: a buzz shaped by a vowel's two resonances, with a quick fade in and out. */
-function syllable(pitch: number, start: number, length: number, vowel: [number, number], gain: number) {
+function syllable(pitch: number, start: number, length: number, vowel: [number, number], gain: number, pan: number) {
   if (!ctx || useSim.getState().settings.muted) return
   const t = ctx.currentTime + start
   const osc = ctx.createOscillator()
@@ -73,7 +76,9 @@ function syllable(pitch: number, start: number, length: number, vowel: [number, 
     filter.Q.value = 5
     osc.connect(filter).connect(amp)
   }
-  amp.connect(ctx.destination)
+  const panner = ctx.createStereoPanner()
+  panner.pan.value = pan
+  amp.connect(panner).connect(ctx.destination)
   osc.start(t)
   osc.stop(t + length + 0.02)
 }
@@ -86,6 +91,15 @@ function syllable(pitch: number, start: number, length: number, vowel: [number, 
  * further up and down. `variant` nudges the pitch so two fruits of the same kind differ.
  */
 export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number, text: string, durationMs: number) {
+  // Several conversations run at once. Only the first voice is heard clearly; anyone who
+  // starts while it is still going is a murmur in the background, and a third is silent.
+  const others = talking
+  talking++
+  window.setTimeout(() => talking--, durationMs)
+  if (others >= 2) return
+  const volume = others ? 0.22 : 1
+  // Spread the voices across the speakers so they are easier to tell apart.
+  const pan = ((variant % 5) - 2) * 0.3
   const base = KIND_PITCH[fruit.kind] * (1 + (((variant * 7) % 5) - 2) * 0.04)
   const letters = text.toLowerCase().slice(0, 90)
   // Finish a little before the bubble closes, however fast the game is running.
@@ -101,7 +115,7 @@ export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number
     // Each letter always lands on the same note, which is what makes it sound like words.
     const lift = question && i > letters.length - 8 ? 1 + (i - letters.length + 8) * 0.03 : 1
     const pitch = base * (1 + ((code % 7) - 3) * swing) * lift
-    syllable(pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, isVowel ? 0.3 : 0.2)
+    syllable(pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, (isVowel ? 0.3 : 0.2) * volume, pan)
   }
 }
 
