@@ -9,7 +9,7 @@ export const RADIUS = 0.55
 export const EYE_SPREAD = 0.085
 export const LIMB_COLOR = '#151515'
 
-type Topper = 'stem-leaf' | 'stem' | 'calyx' | 'crown' | 'cherry' | 'nub' | 'none'
+type Topper = 'stem-leaf' | 'stem' | 'calyx' | 'crown' | 'cherry' | 'nub' | 'leaves' | 'none'
 
 interface Shape {
   /**
@@ -26,6 +26,12 @@ interface Shape {
   topper: Topper
   /** Shiny fruits get a cartoon highlight. */
   glossy: boolean
+  /** How far the fruit curves over to one side, like a banana. */
+  bend?: number
+  /** Colour of stripes running from top to bottom. */
+  stripes?: string
+  /** Colour of little seeds dotted over the skin. */
+  seeds?: string
 }
 
 const SHAPES: Record<FruitKind, Shape> = {
@@ -119,6 +125,41 @@ const SHAPES: Record<FruitKind, Shape> = {
     topper: 'nub',
     glossy: false,
   },
+  banana: {
+    profile: [[0, -1.5], [0.14, -1.42], [0.4, -1.1], [0.53, -0.45], [0.55, 0.15], [0.47, 0.85], [0.27, 1.3], [0.13, 1.5], [0.1, 1.66], [0, 1.68]],
+    faceY: 0,
+    bottom: '#6b4a1e',
+    top: '#b5bd45',
+    roughness: 0.5,
+    topper: 'none',
+    glossy: false,
+    bend: 0.13,
+  },
+  strawberry: {
+    profile: [[0, -1.18], [0.2, -1.05], [0.55, -0.58], [0.86, -0.02], [0.97, 0.42], [0.84, 0.76], [0.46, 0.92], [0, 0.9]],
+    faceY: 0.25,
+    bottom: '#c4132c',
+    top: '#f2504a',
+    roughness: 0.45,
+    topper: 'leaves',
+    glossy: true,
+    seeds: '#ffe28a',
+  },
+  watermelon: {
+    profile: [[0, -1.02], [0.5, -0.95], [0.97, -0.6], [1.13, 0], [0.97, 0.6], [0.5, 0.95], [0, 1.02]],
+    faceY: 0,
+    bottom: '#8fc66a',
+    top: '#3f9d4a',
+    roughness: 0.4,
+    topper: 'nub',
+    glossy: true,
+    stripes: '#1c5a2b',
+  },
+}
+
+/** Sideways shift of a bent fruit's centre line at a given height. */
+function lean(kind: FruitKind, y: number): number {
+  return ((SHAPES[kind].bend ?? 0) * y * y) / RADIUS
 }
 
 // ---------- Geometry (built once per fruit kind and shared) ----------
@@ -162,12 +203,14 @@ function lathe(kind: FruitKind, lo: number, hi: number): LatheGeometry {
   const points = outline(kind).filter((p) => p.y >= lo && p.y <= hi)
   if (lo > min) points.unshift(new Vector2(radiusAt(kind, lo), lo))
   if (hi < max) points.push(new Vector2(radiusAt(kind, hi), hi))
-  const geometry = new LatheGeometry(points, 30)
-
   const shape = SHAPES[kind]
+  // Striped fruits need more facets around, or the stripes come out jagged.
+  const geometry = new LatheGeometry(points, shape.stripes ? 72 : 30)
+
   const skin = new Color(LOOKS[kind].color)
   const bottom = new Color(shape.bottom)
   const top = new Color(shape.top)
+  const stripe = shape.stripes ? new Color(shape.stripes) : null
   const smooth = (edge0: number, edge1: number, x: number) => {
     const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
     return t * t * (3 - 2 * t)
@@ -178,8 +221,16 @@ function lathe(kind: FruitKind, lo: number, hi: number): LatheGeometry {
   for (let i = 0; i < position.count; i++) {
     const t = (position.getY(i) - min) / (max - min)
     c.copy(bottom).lerp(skin, smooth(0, 0.45, t)).lerp(top, smooth(0.6, 1, t) * 0.85)
+    if (stripe) {
+      // Wobbly dark bands running from pole to pole.
+      const around = Math.atan2(position.getZ(i), position.getX(i))
+      c.lerp(stripe, smooth(0.25, 0.6, Math.sin(around * 9 + Math.sin(position.getY(i) * 13) * 0.6)))
+    }
     colors.set([c.r, c.g, c.b], i * 3)
+    // Curve the whole thing over, for the banana.
+    position.setX(i, position.getX(i) + lean(kind, position.getY(i)))
   }
+  if (shape.bend) geometry.computeVertexNormals()
   geometry.setAttribute('color', new BufferAttribute(colors, 3))
   return geometry
 }
@@ -230,6 +281,24 @@ function Top({ kind }: { kind: FruitKind }) {
   const y = points[points.length - 1].y
   const topper = SHAPES[kind].topper
   if (topper === 'none') return null
+  if (topper === 'leaves') {
+    return (
+      <group position={[0, y + 0.01, 0]}>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <group key={i} rotation={[0, (i / 6) * Math.PI * 2, 0]}>
+            <mesh castShadow position={[0.15, -0.015, 0]} rotation={[0, 0, -0.3]} scale={[1, 0.2, 0.5]}>
+              <sphereGeometry args={[0.16, 10, 8]} />
+              <meshStandardMaterial color="#3f9b3a" roughness={0.7} />
+            </mesh>
+          </group>
+        ))}
+        <mesh castShadow position={[0, 0.07, 0]}>
+          <cylinderGeometry args={[0.02, 0.03, 0.14, 6]} />
+          <meshStandardMaterial color="#4f7d2a" roughness={0.9} />
+        </mesh>
+      </group>
+    )
+  }
   if (topper === 'cherry') {
     return (
       <group position={[0, y - 0.02, 0]}>
@@ -278,13 +347,34 @@ function Top({ kind }: { kind: FruitKind }) {
 export function FruitBody({ kind }: { kind: FruitKind }) {
   const shape = SHAPES[kind]
   const [min, max] = heightRange(kind)
+  // Seeds spiral evenly over the skin, leaving the face clear.
+  const seeds = useMemo(() => {
+    if (!shape.seeds) return []
+    const spots: { position: [number, number, number]; turn: number }[] = []
+    for (let i = 0; i < 34; i++) {
+      const y = min * 0.82 + ((max * 0.72 - min * 0.82) * (i + 0.5)) / 34
+      const turn = i * 2.4
+      const r = radiusAt(kind, y) + 0.004
+      const onFace = Math.cos(turn) > 0.55 && Math.abs(y - shape.faceY * RADIUS) < 0.2
+      if (!onFace) spots.push({ position: [Math.sin(turn) * r, y, Math.cos(turn) * r], turn })
+    }
+    return spots
+  }, [kind, shape, min, max])
   const shineY = shape.faceY * RADIUS + 0.26
   return (
     <>
       <mesh castShadow geometry={cached(kind, min, max)}>
         <meshStandardMaterial vertexColors roughness={shape.roughness} />
       </mesh>
-      <Top kind={kind} />
+      <group position={[lean(kind, max), 0, 0]}>
+        <Top kind={kind} />
+      </group>
+      {seeds.map((seed, i) => (
+        <mesh key={i} position={seed.position} rotation={[0, seed.turn, 0]} scale={[1, 1.5, 0.5]}>
+          <sphereGeometry args={[0.017, 6, 6]} />
+          <meshStandardMaterial color={shape.seeds} roughness={0.6} />
+        </mesh>
+      ))}
       {shape.glossy && (
         <group rotation={[0, -0.75, 0]}>
           <mesh position={[0, shineY, radiusAt(kind, shineY) + 0.012]} rotation={[-0.45, 0, 0.5]} scale={[1, 1.7, 1]}>
@@ -341,23 +431,27 @@ export function FruitSlices({
           linearDamping={0.3}
           angularDamping={0.8}
         >
-          <CylinderCollider args={[Math.max(0.02, (band.hi - band.lo) / 2), band.widest * 0.92]} position={[0, (band.hi + band.lo) / 2, 0]} friction={0.9} restitution={0.2} />
+          <CylinderCollider args={[Math.max(0.02, (band.hi - band.lo) / 2), band.widest * 0.92]} position={[lean(kind, (band.hi + band.lo) / 2), (band.hi + band.lo) / 2, 0]} friction={0.9} restitution={0.2} />
           <mesh castShadow geometry={cached(kind, band.lo, band.hi)}>
             <meshStandardMaterial vertexColors roughness={SHAPES[kind].roughness} />
           </mesh>
           {band.hi < max && (
-            <mesh position={[0, band.hi, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <mesh position={[lean(kind, band.hi), band.hi, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <circleGeometry args={[radiusAt(kind, band.hi), 30]} />
               <meshStandardMaterial color={flesh} roughness={0.6} />
             </mesh>
           )}
           {band.lo > min && (
-            <mesh position={[0, band.lo, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <mesh position={[lean(kind, band.lo), band.lo, 0]} rotation={[Math.PI / 2, 0, 0]}>
               <circleGeometry args={[radiusAt(kind, band.lo), 30]} />
               <meshStandardMaterial color={flesh} roughness={0.6} />
             </mesh>
           )}
-          {i === 0 && <Top kind={kind} />}
+          {i === 0 && (
+            <group position={[lean(kind, max), 0, 0]}>
+              <Top kind={kind} />
+            </group>
+          )}
           {/* The dead face, crosses for eyes, stays on its slice. */}
           {i === 1 && (
             <>

@@ -9,6 +9,9 @@ export const FRUIT_KINDS = [
   'blueberry',
   'cherry',
   'kiwi',
+  'banana',
+  'strawberry',
+  'watermelon',
 ] as const
 export type FruitKind = (typeof FRUIT_KINDS)[number]
 
@@ -106,6 +109,8 @@ export interface NightScript {
   inspect: string | null
   /** Who the hunter will take down with it if it dies before the next night. */
   revenge: string | null
+  /** With two or more werewolves: what they whisper to each other before they strike. */
+  wolfChat?: { id: string; say: string }[]
   /** Each living fruit's updated inner state. */
   minds: { id: string; thought: string; feelings: { about: string; trust: number; note: string }[] }[]
 }
@@ -117,8 +122,8 @@ export interface Conversation {
   lines: { id: string; say: string; accuses?: string }[]
 }
 
-/** A short burst of body language: a gasp, a nervous shake, a cheer or a sulk. */
-export type Reaction = 'gasp' | 'shake' | 'cheer' | 'sulk'
+/** A short burst of body language: a gasp, a nervous shake, a cheer, a sulk or a puzzled look. */
+export type Reaction = 'gasp' | 'shake' | 'cheer' | 'sulk' | 'puzzle'
 
 /** One entry in the end-of-game recap. Fruits are referred to by id. */
 export type RecapEvent =
@@ -134,8 +139,8 @@ export type RecapEvent =
 export interface DayScript {
   /** Each round splits the living fruits into small groups that talk at the same time. */
   rounds: Conversation[][]
-  /** One vote per living fruit. */
-  votes: { id: string; target: string; reason: string }[]
+  /** One vote per living fruit. `lastWords` is what it cries out if it is the one voted out. */
+  votes: { id: string; target: string; reason: string; lastWords?: string }[]
 }
 
 /**

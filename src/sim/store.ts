@@ -8,7 +8,10 @@ export const MAX_FRUITS = 10
 const HOME_RING = 10.4
 const SEAT_RING = 3.8
 
-const NAMES = ['Pip', 'Clem', 'Zest', 'Dusk', 'Bosc', 'Key', 'Fuzz', 'Indigo', 'Bing', 'Tang', 'Mango', 'Fig']
+const NAMES = [
+  'Pip', 'Clem', 'Zest', 'Dusk', 'Bosc', 'Key', 'Fuzz', 'Indigo', 'Bing', 'Tang', 'Mango', 'Fig',
+  'Juju', 'Pomelo', 'Quince', 'Rind', 'Nectar', 'Pith', 'Sorbet', 'Jam', 'Peel', 'Mellow', 'Tart', 'Squash',
+]
 const QUIRKS = [
   'Ends sentences with a nervous laugh.',
   'Convinced it is the smartest fruit in the village.',
@@ -81,14 +84,25 @@ function randomTraits(): Traits {
 
 let nextId = 1
 
-function makeFruit(index: number, taken: string[]): FruitDef {
-  const name = NAMES.find((n) => !taken.includes(n)) ?? `Fruit ${index + 1}`
-  return { id: `f${nextId++}`, name, kind: FRUIT_KINDS[index % FRUIT_KINDS.length], traits: randomTraits() }
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]
+}
+
+/** A new random villager: a name and a kind of fruit nobody in the roster has yet, if any are left. */
+function makeFruit(roster: FruitDef[]): FruitDef {
+  const names = NAMES.filter((n) => !roster.some((f) => f.name === n))
+  const kinds = FRUIT_KINDS.filter((k) => !roster.some((f) => f.kind === k))
+  return {
+    id: `f${nextId++}`,
+    name: names.length ? pick(names) : `Fruit ${roster.length + 1}`,
+    kind: pick(kinds.length ? kinds : FRUIT_KINDS),
+    traits: randomTraits(),
+  }
 }
 
 function makeRoster(count: number): FruitDef[] {
   const roster: FruitDef[] = []
-  for (let i = 0; i < count; i++) roster.push(makeFruit(i, roster.map((f) => f.name)))
+  for (let i = 0; i < count; i++) roster.push(makeFruit(roster))
   return roster
 }
 
@@ -211,7 +225,7 @@ export const useSim = create<SimState>((set, get) => ({
     set((s) =>
       s.roster.length >= MAX_FRUITS
         ? s
-        : setupState([...s.roster, makeFruit(s.roster.length, s.roster.map((f) => f.name))]),
+        : setupState([...s.roster, makeFruit(s.roster)]),
     ),
   removeFruit: (id) =>
     set((s) => (s.roster.length <= MIN_FRUITS ? s : setupState(s.roster.filter((f) => f.id !== id)))),

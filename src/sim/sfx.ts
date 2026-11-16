@@ -41,6 +41,9 @@ const KIND_PITCH: Record<FruitKind, number> = {
   blueberry: 420,
   cherry: 460,
   kiwi: 260,
+  banana: 245,
+  strawberry: 440,
+  watermelon: 165,
 }
 
 /** Mouth shapes: the two resonances that make a buzz sound like "ah", "eh", "ee", "oh" or "oo". */
