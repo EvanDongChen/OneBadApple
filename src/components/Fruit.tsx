@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei'
 import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
+import { PARTY_BEAT_MS } from '../sim/sfx'
 import { fruitPositions, useSim } from '../sim/store'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
@@ -117,6 +118,8 @@ export default function Fruit({ id }: { id: string }) {
   const footMeshes = useRef<(Mesh | null)[]>([null, null])
   const feet = useRef<Foot[]>([makeFoot(spawn[0] - FOOT_SPREAD, spawn[2]), makeFoot(spawn[0] + FOOT_SPREAD, spawn[2])])
   const waddlePhase = useRef(Math.random() * Math.PI * 2)
+  /** Last beat of the party music this fruit hopped on. */
+  const lastBeat = useRef(-1)
   // Slightly uneven eyes make the face derpier.
   const eyeOffsets = useMemo(() => [(Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.04], [])
 
@@ -273,6 +276,20 @@ export default function Fruit({ id }: { id: string }) {
       const focus = followPos ?? (lookId ? fruitPositions.get(lookId) : undefined)
       v.tmp.set((focus?.x ?? 0) - t.x, 0, (focus?.z ?? 0) - t.z)
     }
+    // Dance party: hop on every beat, rock from side to side, and spin on the spot.
+    const party = sim.party
+    if (party && !walking && party.dancers.includes(id)) {
+      const beat = (performance.now() - party.at) / PARTY_BEAT_MS
+      const index = Math.floor(beat)
+      if (index !== lastBeat.current) {
+        lastBeat.current = index
+        b.applyImpulse({ x: 0, y: m * 4.2, z: 0 }, true)
+        v.torque.addScaledVector(v.fwd, (index % 2 ? 1 : -1) * 28)
+      }
+      const turn = beat * 1.3 + waddlePhase.current
+      v.tmp.set(Math.sin(turn), 0, Math.cos(turn))
+    }
+
     if (v.tmp.lengthSq() > 1e-4) {
       v.tmp.normalize()
       const yawError = Math.atan2(v.fwd.z * v.tmp.x - v.fwd.x * v.tmp.z, v.fwd.dot(v.tmp))
@@ -295,6 +312,9 @@ export default function Fruit({ id }: { id: string }) {
     v.vel.set(lv.x, 0, lv.z)
     v.quat.set(r.x, r.y, r.z, r.w)
     fruitPositions.get(id)?.copy(v.pos)
+    const party = useSim.getState().party
+    const dancing = alive && !!party && party.dancers.includes(id)
+    const beat = party ? (performance.now() - party.at) / PARTY_BEAT_MS : 0
 
     // Squash and stretch from vertical speed.
     if (visual.current) {
@@ -317,6 +337,8 @@ export default function Fruit({ id }: { id: string }) {
     } else {
       mouthTimer.current = 0
     }
+    // Dancers wear a big open grin.
+    if (dancing && !speechText) shape = 4
     mouthShape.current = shape
     mouthMeshes.current.forEach((mesh, i) => {
       if (mesh) mesh.visible = i === shape
@@ -346,6 +368,13 @@ export default function Fruit({ id }: { id: string }) {
         v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
         arm[0].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, 0.26).addScaledVector(UP, 0.05), 0.5)
         arm[1].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, striking ? 0.6 : 0.4).addScaledVector(UP, striking ? 0.05 : 0.5), 0.5)
+      }
+      // Dancing: both arms in the air, pumping in turn with the beat.
+      if (dancing) {
+        const pump = Math.sin(beat * Math.PI + i * Math.PI)
+        v.tmp.set(side, 0, 0).applyQuaternion(v.quat)
+        arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.22).addScaledVector(UP, 0.16), 0.5)
+        arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.26 + pump * 0.1).addScaledVector(UP, 0.5 + pump * 0.12), 0.5)
       }
       // Voting: the right arm points straight at the chosen fruit.
       const pointed = alive && i === 1 && pointAt ? fruitPositions.get(pointAt) : undefined

@@ -653,20 +653,21 @@ button.roster-row.on {
 
 /* ---------- End card ---------- */
 
+/* Sits under the sign, clear of the dance floor in the middle of the screen. */
 .banner {
-  top: 50%;
+  top: 122px;
   left: 50%;
-  transform: translate(-50%, -50%) rotate(-1.5deg);
+  transform: translateX(-50%) rotate(-1.5deg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 26px 34px 24px;
+  gap: 9px;
+  padding: 16px 26px 16px;
   text-align: center;
 }
 
 .banner h1 {
-  font-size: 46px;
+  font-size: 34px;
   transform: none;
 }
 

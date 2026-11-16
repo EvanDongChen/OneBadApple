@@ -58,6 +58,31 @@ export function dawnChime() {
   tone(659, 0.36, 0.8, 'triangle', 0.12)
 }
 
+/** Length of one beat of the party music, in milliseconds. The dancers hop in time with it. */
+export const PARTY_BEAT_MS = 500
+const PARTY_TUNE = [262, 330, 392, 523, 392, 330, 294, 392]
+let partyTimer: number | undefined
+
+/** Start the looping victory tune: a kick on every beat, a bouncy lead and an off-beat hat. */
+export function startParty() {
+  stopParty()
+  let step = 0
+  const bar = () => {
+    tone(150, 0, 0.18, 'sine', 0.3, 45)
+    tone(PARTY_TUNE[step % PARTY_TUNE.length], 0, 0.16, 'square', 0.045)
+    tone(PARTY_TUNE[(step + 2) % PARTY_TUNE.length] * 2, 0.25, 0.1, 'triangle', 0.05)
+    tone(6000, 0.25, 0.03, 'square', 0.015)
+    step++
+  }
+  bar()
+  partyTimer = window.setInterval(bar, PARTY_BEAT_MS)
+}
+
+export function stopParty() {
+  if (partyTimer !== undefined) window.clearInterval(partyTimer)
+  partyTimer = undefined
+}
+
 export function voteTick() {
   tone(880, 0, 0.08, 'triangle', 0.08)
 }

@@ -136,6 +136,8 @@ export interface SimState {
   attack: { attackerId: string; victimId: string; striking: boolean } | null
   /** Fruits that died by the knife and fall apart in slices (others are flung whole). */
   chopped: Record<string, boolean | undefined>
+  /** The winners' dance party: when it started (for keeping time) and who is dancing. */
+  party: { at: number; dancers: string[] } | null
   /** Who everyone turns to look at when they have no partner. */
   focusId: string | null
   /** Ballots cast so far this vote: voter id to target id. */
@@ -176,6 +178,7 @@ function setupState(roster: FruitDef[]) {
     speech: {},
     thinking: {},
     attack: null,
+    party: null,
     chopped: {},
     focusId: null,
     votes: {},

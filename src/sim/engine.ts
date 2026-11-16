@@ -1,6 +1,6 @@
 import { buildPersona, GeminiBrain } from './geminiBrain'
 import { MockBrain } from './mockBrain'
-import { babble, dawnChime, nightChime, slice, thud, voteTick } from './sfx'
+import { babble, dawnChime, nightChime, slice, startParty, stopParty, thud, voteTick } from './sfx'
 import { fruitPositions, layout, maxWolves, useSim } from './store'
 import type { Brain, Conversation, DayScript, FruitState, LogEntry, NightScript, Phase, Role, Rules, Winner, WorldView } from './types'
 
@@ -357,9 +357,14 @@ async function daytime(brain: Brain, revenge: string | null, signal: AbortSignal
 }
 
 function finish(side: Winner) {
-  set({ phase: 'over', winner: side, revealRoles: true, focusId: null })
+  // The jester was just voted out, so it gets back up for its own party.
+  if (side === 'jester') set((s) => ({ fruits: s.fruits.map((f) => (f.role === 'jester' ? { ...f, alive: true } : f)) }))
+  const dancers = alive()
+    .filter((f) => (side === 'werewolves' ? f.role === 'werewolf' : side === 'jester' ? f.role === 'jester' : f.role !== 'werewolf' && f.role !== 'jester'))
+    .map((f) => f.id)
+  set({ phase: 'over', winner: side, revealRoles: true, focusId: null, party: { at: performance.now(), dancers } })
   sendTo((f) => f.seat)
-  dawnChime()
+  startParty()
   const text: Record<Winner, string> = {
     village: 'Every werewolf is dead. The village wins!',
     werewolves: 'The werewolves have taken over. The werewolves win!',
@@ -369,6 +374,7 @@ function finish(side: Winner) {
 }
 
 async function run(signal: AbortSignal) {
+  stopParty()
   const s = get()
   const { rules } = s.settings
   const useGemini = s.settings.brain === 'gemini' && s.settings.apiKey
@@ -406,6 +412,7 @@ async function run(signal: AbortSignal) {
     chopped: {},
     focusId: null,
     attack: null,
+    party: null,
     calls: 0,
     paused: false,
     revealRoles: false,
@@ -441,5 +448,6 @@ export function startGame() {
 export function stopGame() {
   controller?.abort()
   controller = null
+  stopParty()
   get().backToSetup()
 }
