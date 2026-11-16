@@ -1,4 +1,5 @@
 import { useSim } from './store'
+import type { FruitDef, FruitKind } from './types'
 
 // Tiny synthesised sound effects; no audio files.
 let ctx: AudioContext | null = null
@@ -28,13 +29,51 @@ function tone(freq: number, start: number, duration: number, type: OscillatorTyp
   osc.stop(t + duration + 0.02)
 }
 
-/** Gibberish speech: a run of short blips at a pitch unique to the speaker. */
-export function babble(voice: number, durationMs: number) {
-  const base = 260 + (voice % 10) * 45
-  const count = Math.min(24, Math.floor(durationMs / 95))
+/** Each kind of fruit has its own voice: small fruits squeak, big ones rumble, sour ones buzz. */
+const KIND_VOICE: Record<FruitKind, { pitch: number; wave: OscillatorType }> = {
+  apple: { pitch: 300, wave: 'square' },
+  orange: { pitch: 235, wave: 'square' },
+  lemon: { pitch: 430, wave: 'sawtooth' },
+  plum: { pitch: 340, wave: 'triangle' },
+  pear: { pitch: 190, wave: 'triangle' },
+  lime: { pitch: 480, wave: 'sawtooth' },
+  peach: { pitch: 385, wave: 'sine' },
+  blueberry: { pitch: 590, wave: 'triangle' },
+  cherry: { pitch: 680, wave: 'square' },
+  kiwi: { pitch: 265, wave: 'sawtooth' },
+}
+const WAVE_GAIN: Record<OscillatorType, number> = { square: 0.035, sawtooth: 0.03, triangle: 0.075, sine: 0.085, custom: 0.035 }
+
+/**
+ * Gibberish speech in the speaker's own voice. The kind of fruit sets the pitch and tone,
+ * talkative fruits gabble faster, and aggressive ones swing further up and down.
+ * `variant` nudges the pitch so two fruits of the same kind still sound different.
+ */
+export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number, durationMs: number) {
+  const { pitch, wave } = KIND_VOICE[fruit.kind]
+  const base = pitch * (1 + (((variant * 7) % 5) - 2) * 0.035)
+  const gap = 0.135 - fruit.traits.talkativeness * 0.07
+  const swing = 0.12 + fruit.traits.aggression * 0.38
+  const count = Math.min(40, Math.floor(durationMs / 1000 / gap))
   for (let i = 0; i < count; i++) {
-    tone(base * (0.9 + Math.random() * 0.35), i * 0.095, 0.07, 'square', 0.035)
+    tone(base * (1 - swing / 2 + Math.random() * swing), i * gap, gap * 0.75, wave, WAVE_GAIN[wave])
   }
+}
+
+/** A sharp intake of breath from the whole village. */
+export function gasp() {
+  tone(280, 0, 0.22, 'triangle', 0.12, 720)
+  tone(360, 0.04, 0.2, 'triangle', 0.08, 900)
+}
+
+export function cheer() {
+  ;[523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.07, 0.16, 'triangle', 0.09))
+}
+
+/** A sad trombone, more or less. */
+export function sulk() {
+  tone(233, 0, 0.3, 'sawtooth', 0.045, 220)
+  tone(196, 0.3, 0.6, 'sawtooth', 0.045, 150)
 }
 
 /** A quick blade swish. */

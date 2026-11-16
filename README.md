@@ -32,8 +32,11 @@ Nobody plays. You just watch it go wrong.
 | 🤫 **Private conversations** | Fruits pair off and talk at the same time. Only the fruits in a conversation hear it, so rumours spread by word of mouth and get passed on wrongly. |
 | 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
 | 🔪 **Fruit physics** | Wobbly walking, floppy arms, stepping legs, and victims that fall apart into slices shaped like the fruit they were. |
+| 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong. |
+| 🗣️ **Voices** | Every fruit babbles in its own voice: the kind of fruit sets the pitch, and chatty fruits gabble faster. |
+| 📜 **Recap** | When the game ends, read back who killed whom, how every vote went, and when each fruit changed its mind about another, marked right or wrong. |
 | 🍐 **Ten fruits** | Apple, orange, lemon, plum, pear, lime, peach, blueberry, cherry and kiwi, each with its own shape. |
-| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed, peek at roles, show thoughts, and sound on or off. |
+| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, and sound on or off. |
 
 ## 📸 Screenshots
 
@@ -174,7 +177,8 @@ src/
     ├── fruitShapes.tsx     the ten fruit shapes, and how each one slices
     ├── Stage.tsx           the white stage, grid floor and lights
     ├── SetupPanel.tsx      the setup screen
-    └── Hud.tsx             in-game overlay: phase sign, controls, villagers, gossip log
+    ├── Hud.tsx             in-game overlay: phase sign, controls, villagers, gossip log
+    └── Recap.tsx           the end-of-game recap
 ```
 
 The engine only enforces the rules. Every choice comes from a `Brain`, which has two methods:

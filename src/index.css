@@ -33,6 +33,8 @@ body,
 
 h1,
 h2,
+h3,
+h4,
 p {
   margin: 0;
 }
@@ -678,6 +680,157 @@ button.roster-row.on {
 .banner .row {
   justify-content: center;
   align-items: center;
+}
+
+/* ---------- Recap of the finished game ---------- */
+
+.recap {
+  top: 122px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 30;
+}
+
+.recap section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 3px dashed var(--ink);
+  padding-top: 10px;
+}
+
+.recap h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 17px;
+  margin-top: 4px;
+}
+
+.recap h3 .sky-icon {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.recap h3 .sky-icon.moon {
+  box-shadow: inset -5px -1px 0 #8fa0d8;
+}
+
+.recap h4 {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+.recap .role {
+  display: inline-block;
+  margin: 0 3px 0 4px;
+  vertical-align: 1px;
+}
+
+.recap .deed {
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 6px 9px;
+  line-height: 1.5;
+}
+
+.recap .deed.kill,
+.recap .deed.shot {
+  border-left: 7px solid var(--apple);
+}
+
+.recap .deed.saved {
+  border-left: 7px solid var(--leaf);
+}
+
+.recap .deed.inspect {
+  border-left: 7px solid var(--plum);
+}
+
+.recap .deed.vote {
+  border-left: 7px solid var(--sun);
+}
+
+.recap .turns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 2px 0;
+}
+
+.recap .turn {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.recap .arrow {
+  font-size: 10px;
+  line-height: 18px;
+  flex: none;
+}
+
+.recap .arrow.bad {
+  color: var(--apple);
+}
+
+.recap .arrow.good {
+  color: var(--leaf);
+}
+
+.recap .verdict {
+  font-family: var(--display);
+  font-size: 10px;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ink);
+}
+
+.recap .verdict.right {
+  background: #cfeac4;
+}
+
+.recap .verdict.wrong {
+  background: #ffd9d2;
+}
+
+.recap .note {
+  opacity: 0.7;
+}
+
+.recap .ballots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.recap .ballot {
+  display: grid;
+  grid-template-columns: 150px 70px 1fr;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.recap .crosses {
+  font-family: var(--display);
+  color: var(--apple);
+  letter-spacing: 1px;
 }
 
 /* ---------- Labels floating over fruits ---------- */

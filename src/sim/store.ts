@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Vector3 } from 'three'
 import { FRUIT_KINDS } from './types'
-import type { FruitDef, FruitState, LogEntry, Phase, Rules, Traits, Winner } from './types'
+import type { FruitDef, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
@@ -138,6 +138,10 @@ export interface SimState {
   chopped: Record<string, boolean | undefined>
   /** The winners' dance party: when it started (for keeping time) and who is dancing. */
   party: { at: number; dancers: string[] } | null
+  /** Body language each fruit is showing right now. */
+  reactions: Record<string, Reaction | undefined>
+  /** Everything worth retelling once the game is over. */
+  recap: RecapEvent[]
   /** Who everyone turns to look at when they have no partner. */
   focusId: string | null
   /** Ballots cast so far this vote: voter id to target id. */
@@ -179,6 +183,7 @@ function setupState(roster: FruitDef[]) {
     thinking: {},
     attack: null,
     party: null,
+    reactions: {},
     chopped: {},
     focusId: null,
     votes: {},
@@ -189,6 +194,7 @@ function setupState(roster: FruitDef[]) {
 export const useSim = create<SimState>((set, get) => ({
   ...setupState(initialRoster),
   log: [],
+  recap: [],
   speed: 1,
   revealRoles: false,
   showThoughts: false,
@@ -222,3 +228,6 @@ export const useSim = create<SimState>((set, get) => ({
 
 /** Live world positions, written by each Fruit every frame. Kept out of React state. */
 export const fruitPositions = new Map<string, Vector3>()
+
+// Dev builds expose the store on the window, so the game can be poked at from the console.
+if (import.meta.env.DEV) Object.assign(window, { __sim: { useSim, fruitPositions } })

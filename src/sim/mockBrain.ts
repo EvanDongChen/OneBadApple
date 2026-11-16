@@ -307,7 +307,7 @@ export class MockBrain implements Brain {
       const view = this.view(world, speaker, [...(extra.get(speaker.id) ?? []), ...said])
       const [say, meta] = t === 0 ? this.opener(view, next) : this.reply(view, previous, last)
       last = meta
-      lines.push({ id: speaker.id, say })
+      lines.push({ id: speaker.id, say, accuses: meta.tone === 'accuse' ? meta.about : undefined })
       said.push(`${speaker.name}: ${say}`)
     }
     for (const m of members) extra.set(m.id, [...(extra.get(m.id) ?? []), ...said])

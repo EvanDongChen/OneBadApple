@@ -113,8 +113,22 @@ export interface NightScript {
 /** A few fruits talking among themselves. Only the members hear it. */
 export interface Conversation {
   members: string[]
-  lines: { id: string; say: string }[]
+  /** `accuses` is the id of the fruit the line points the finger at, when the brain knows it. */
+  lines: { id: string; say: string; accuses?: string }[]
 }
+
+/** A short burst of body language: a gasp, a nervous shake, a cheer or a sulk. */
+export type Reaction = 'gasp' | 'shake' | 'cheer' | 'sulk'
+
+/** One entry in the end-of-game recap. Fruits are referred to by id. */
+export type RecapEvent =
+  | { kind: 'kill'; day: number; wolf: string; victim: string }
+  | { kind: 'saved'; day: number; wolf: string; victim: string; doctor: string }
+  | { kind: 'inspect'; day: number; seer: string; target: string; wolf: boolean }
+  | { kind: 'shot'; day: number; hunter: string; target: string }
+  | { kind: 'vote'; day: number; ballots: { voter: string; target: string }[]; out: string | null; tied: string[] }
+  /** A fruit's trust in another crossed into clear trust or clear distrust overnight. */
+  | { kind: 'turn'; day: number; who: string; about: string; from: number; to: number; note: string }
 
 /** Everything that happens in one day, decided in a single batch. */
 export interface DayScript {
