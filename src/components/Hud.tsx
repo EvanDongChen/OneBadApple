@@ -3,6 +3,7 @@ import { startGame, stopGame } from '../sim/engine'
 import { useSim } from '../sim/store'
 import type { Phase } from '../sim/types'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
+import Recap from './Recap'
 import RichText from './RichText'
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -32,6 +33,7 @@ export default function Hud() {
   const settings = useSim((s) => s.settings)
   const logEnd = useRef<HTMLDivElement>(null)
   const [mindId, setMindId] = useState<string | null>(null)
+  const [recapOpen, setRecapOpen] = useState(false)
   const mind = fruits.find((f) => f.id === mindId)
   const dark = phase === 'night'
 
@@ -120,6 +122,7 @@ export default function Hud() {
               {entry.name && (
                 <>
                   <RichText text={entry.name} />
+                  {entry.kind === 'ghost' && <span className="verb">'s ghost</span>}
                   {entry.to && (
                     <>
                       <span className="verb"> to </span>
@@ -136,7 +139,9 @@ export default function Hud() {
         </div>
       </section>
 
-      {winner && (
+      {winner && recapOpen && <Recap onClose={() => setRecapOpen(false)} />}
+
+      {winner && !recapOpen && (
         <div className="panel banner">
           <h1>{winner === 'village' ? 'The village wins!' : winner === 'jester' ? 'The jester wins!' : 'The wolves win!'}</h1>
           <p>
@@ -151,6 +156,7 @@ export default function Hud() {
             <button className="primary" onClick={startGame}>
               Play again
             </button>
+            <button onClick={() => setRecapOpen(true)}>Read the recap</button>
             <button onClick={stopGame}>Change the villagers</button>
           </div>
         </div>

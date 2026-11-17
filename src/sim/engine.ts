@@ -1,8 +1,9 @@
 import { buildPersona, GeminiBrain } from './geminiBrain'
 import { MockBrain } from './mockBrain'
-import { babble, dawnChime, nightChime, slice, thud, voteTick } from './sfx'
+import type { GhostEvent } from './mockBrain'
+import { babble, cheer, dawnChime, gasp, gunshot, nightChime, slice, startParty, stopParty, sulk, thud, voteTick } from './sfx'
 import { fruitPositions, layout, maxWolves, useSim } from './store'
-import type { Brain, Conversation, DayScript, FruitState, LogEntry, NightScript, Phase, Role, Rules, Winner, WorldView } from './types'
+import type { Brain, Conversation, DayScript, FruitState, LogEntry, NightScript, Phase, Reaction, RecapEvent, Role, Rules, Winner, WorldView } from './types'
 
 const ROLE_LABEL: Record<Role, string> = {
   werewolf: 'a werewolf',
@@ -87,6 +88,41 @@ function log(entry: LogEntry) {
   get().addLog(entry)
 }
 
+/** Note something down for the end-of-game recap. */
+function record(event: RecapEvent) {
+  set((s) => ({ recap: [...s.recap, event] }))
+}
+
+/** Give some fruits a burst of body language that wears off by itself. */
+function react(ids: string[], reaction: Reaction, ms: number, signal: AbortSignal) {
+  if (!ids.length) return
+  set((s) => ({ reactions: { ...s.reactions, ...Object.fromEntries(ids.map((id) => [id, reaction])) } }))
+  wait(ms, signal).then(
+    () =>
+      set((s) => ({
+        // Only clear the ones still showing this reaction; a newer one may have replaced it.
+        reactions: { ...s.reactions, ...Object.fromEntries(ids.filter((id) => s.reactions[id] === reaction).map((id) => [id, undefined])) },
+      })),
+    () => {},
+  )
+}
+
+const ACCUSING = /\b(wol(f|ves)|suspect|suspicious|liar|lying|lies|guilty|rotten|killer|murder|did it|don'?t trust|can'?t trust|vot(e|ing) (for|out)|hiding something|shifty|fishy)\b/i
+
+/**
+ * Who a spoken line points the finger at. The No AI brain says so itself; for Gemini's lines
+ * it is guessed from an accusing word next to the name of someone standing in the group.
+ */
+function accusedBy(line: Conversation['lines'][number], members: string[]): string | undefined {
+  if (line.accuses) return members.includes(line.accuses) ? line.accuses : undefined
+  if (!ACCUSING.test(line.say)) return undefined
+  const text = line.say.toLowerCase()
+  return members.find((id) => id !== line.id && new RegExp(`\\b${byId(id).name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text))
+}
+
+/** Clear trust (+1), clear distrust (-1) or neither. A change of band is a change of heart. */
+const band = (trust: number) => (trust <= -2 ? -1 : trust >= 2 ? 1 : 0)
+
 function remember(id: string, note: string) {
   set((s) => ({ fruits: s.fruits.map((f) => (f.id === id ? { ...f, memory: [...f.memory, note] } : f)) }))
 }
@@ -113,7 +149,7 @@ function world(): WorldView {
     fruits: s.fruits,
     // Conversations are private, so only events and votes count as public.
     publicLog: s.log
-      .filter((e) => e.kind !== 'say')
+      .filter((e) => e.kind !== 'say' && e.kind !== 'ghost')
       .slice(-40)
       .map((e) => (e.name ? `${e.name}: ${e.text}` : `[${e.text}]`)),
   }
@@ -133,7 +169,7 @@ async function say(fruit: FruitState, text: string, entry: Pick<LogEntry, 'kind'
   const duration = 1500 + text.length * 40
   set((s) => ({ speech: { ...s.speech, [fruit.id]: text }, focusId: fruit.id }))
   log({ ...entry, name: fruit.name, text })
-  babble(get().fruits.findIndex((f) => f.id === fruit.id), duration / get().speed)
+  babble(fruit, get().fruits.findIndex((f) => f.id === fruit.id), text, duration / get().speed)
   await wait(duration, signal)
   set((s) => ({ speech: { ...s.speech, [fruit.id]: undefined } }))
   await wait(250, signal)
@@ -151,6 +187,18 @@ function kill(id: string, chop: boolean) {
 
 /** Store each fruit's new thought and feelings so the next prompt (and the UI) can use them. */
 function applyMinds(minds: NightScript['minds']) {
+  const { day, fruits } = get()
+  for (const mind of minds) {
+    const fruit = fruits.find((f) => f.id === mind.id)
+    if (!fruit) continue
+    for (const feel of mind.feelings) {
+      const from = fruit.feelings[feel.about]?.trust ?? 0
+      // A big enough swing into clear trust or distrust is worth retelling in the recap.
+      if (band(feel.trust) !== 0 && band(feel.trust) !== band(from) && Math.abs(feel.trust - from) >= 3 && fruits.some((f) => f.id === feel.about)) {
+        record({ kind: 'turn', day, who: fruit.id, about: feel.about, from, to: feel.trust, note: feel.note })
+      }
+    }
+  }
   set((s) => ({
     fruits: s.fruits.map((f) => {
       const mind = minds.find((m) => m.id === f.id)
@@ -199,8 +247,66 @@ async function hunterShot(dead: FruitState, revenge: string | null, signal: Abor
   slice()
   await wait(500, signal)
   kill(target.id, false)
+  record({ kind: 'shot', day: get().day, hunter: dead.id, target: target.id })
+  gasp()
+  react(alive().map((f) => f.id), 'gasp', 1400, signal)
   log({ kind: 'system', text: `${dead.name} was the hunter and takes ${target.name} down too. ${target.name} was ${ROLE_LABEL[target.role]}.` })
   await wait(2200, signal)
+}
+
+/** The dead watch the vote. They know who everyone really was, and take it personally. */
+function ghostsReact(targetIsWolf: boolean, ms: number, signal: AbortSignal, except?: string) {
+  const dead = get().fruits.filter((f) => !f.alive && f.id !== except)
+  // Village ghosts are pleased when a wolf is in trouble; a wolf's ghost is pleased when an innocent is.
+  react(dead.filter((f) => (f.role === 'werewolf') !== targetIsWolf).map((f) => f.id), 'cheer', ms, signal)
+  react(dead.filter((f) => (f.role === 'werewolf') === targetIsWolf).map((f) => f.id), 'sulk', ms, signal)
+}
+
+/**
+ * A ghost or two thinks something about what just happened. The thought floats over the
+ * ghost for a few seconds and goes in the log; no living fruit ever hears it.
+ */
+function ghostsThink(event: GhostEvent, about: FruitState | undefined, signal: AbortSignal, opts: { max?: number; except?: string } = {}) {
+  const ghosts = shuffle(get().fruits.filter((f) => !f.alive && f.id !== opts.except && f.id !== about?.id)).slice(0, opts.max ?? 2)
+  ghosts.forEach((ghost, i) => {
+    const text = stockLines.ghostThought(ghost, event, about)
+    wait(200 + i * 700, signal)
+      .then(() => {
+        set((s) => ({ ghostThoughts: { ...s.ghostThoughts, [ghost.id]: text } }))
+        log({ kind: 'ghost', name: ghost.name, text })
+        return wait(3600, signal)
+      })
+      .then(
+        () => set((s) => (s.ghostThoughts[ghost.id] === text ? { ghostThoughts: { ...s.ghostThoughts, [ghost.id]: undefined } } : s)),
+        () => {},
+      )
+  })
+}
+
+/** With more than one werewolf, the pack slips out to argue in whispers over who to kill. */
+async function wolfHuddle(wolves: FruitState[], lines: NonNullable<NightScript['wolfChat']>, signal: AbortSignal) {
+  log({ kind: 'system', text: 'The werewolves slip out to whisper.' })
+  ghostsThink('whisper', undefined, signal, { max: 1 })
+  const ids = wolves.map((w) => w.id)
+  const angle = Math.atan2(wolves[0].home[1], wolves[0].home[0])
+  const targets: Record<string, [number, number]> = {}
+  const lookAt: Record<string, string> = {}
+  wolves.forEach((wolf, i) => {
+    const a = angle + Math.PI / 2 + (i / wolves.length) * Math.PI * 2
+    targets[wolf.id] = [Math.cos(angle) * TALK_RING + Math.cos(a) * 0.95, Math.sin(angle) * TALK_RING + Math.sin(a) * 0.95]
+    lookAt[wolf.id] = ids[(i + 1) % ids.length]
+  })
+  set((s) => ({ follow: {}, lookAt, targets: { ...s.targets, ...targets } }))
+  await until(() => arrived(ids), 9000, signal)
+  for (const line of lines) {
+    const speaker = wolves.find((w) => w.id === line.id)
+    if (!speaker) continue
+    const listeners = ids.filter((id) => id !== speaker.id)
+    set((s) => ({ lookAt: { ...s.lookAt, ...Object.fromEntries(listeners.map((id) => [id, speaker.id])) } }))
+    hear(ids, `${speaker.name}: ${line.say}`)
+    await say(speaker, line.say, { kind: 'say', to: listeners.map((id) => byId(id).name).join(' & ') }, signal)
+  }
+  await wait(300, signal)
 }
 
 /** Returns the hunter's standing revenge choice, for use if it dies during the coming day. */
@@ -229,11 +335,14 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   const seer = living.find((f) => f.role === 'seer')
   if (seer && script.inspect) {
     const seen = byId(script.inspect)
+    record({ kind: 'inspect', day, seer: seer.id, target: seen.id, wolf: seen.role === 'werewolf' })
     remember(
       seer.id,
       `Night ${day}: you inspected ${seen.name}. ${seen.name} is ${seen.role === 'werewolf' ? 'a WEREWOLF' : 'NOT a werewolf'}.`,
     )
   }
+
+  if (wolves.length > 1 && script.wolfChat?.length) await wolfHuddle(wolves, script.wolfChat, signal)
 
   // Act it out: the wolf hurries over with a knife, lunges, and the victim is chopped.
   set((s) => ({ follow: { ...s.follow, [attacker.id]: victim.id }, attack: { attackerId: attacker.id, victimId: victim.id, striking: false } }))
@@ -244,11 +353,12 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   await wait(280, signal)
   const saved = script.protect === victim.id
   if (!saved) kill(victim.id, true)
+  record(saved ? { kind: 'saved', day, wolf: attacker.id, victim: victim.id, doctor: doctor?.id ?? '' } : { kind: 'kill', day, wolf: attacker.id, victim: victim.id })
   await wait(1400, signal)
   // Day only breaks once the wolf has hurried back to its own spot.
   set((s) => ({ attack: s.attack && { ...s.attack, striking: false } }))
   sendTo((f) => f.home)
-  await until(() => arrived([attacker.id]), 10000, signal)
+  await until(() => arrived(wolves.map((w) => w.id)), 10000, signal)
   set({ attack: null })
   await wait(700, signal)
 
@@ -257,8 +367,17 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   if (saved) {
     log({ kind: 'system', text: `Dawn of day ${day}. Someone was attacked in the night, but the doctor saved them.` })
     if (doctor) remember(doctor.id, `Your protection saved ${victim.name} on night ${day}.`)
+    // Relief all round.
+    cheer()
+    react(alive().map((f) => f.id), 'cheer', 1500, signal)
+    ghostsThink('saved', undefined, signal, { max: 1 })
   } else {
     log({ kind: 'system', text: `Dawn of day ${day}. ${victim.name} was found dead. They were ${ROLE_LABEL[victim.role]}.` })
+    // Everyone turns to the body and flinches.
+    set({ focusId: victim.id })
+    gasp()
+    react(get().fruits.filter((f) => f.id !== victim.id).map((f) => f.id), 'gasp', 1800, signal)
+    ghostsThink('death', victim, signal)
     await hunterShot(victim, script.revenge, signal)
   }
   await wait(2500, signal)
@@ -295,6 +414,9 @@ async function talkRound(groups: Conversation[], round: number, total: number, s
         // Everyone in the group turns to whoever is speaking.
         set((s) => ({ lookAt: { ...s.lookAt, ...Object.fromEntries(listeners.map((id) => [id, speaker.id])) } }))
         hear(group.members, `${speaker.name}: ${line.say}`)
+        // A fruit accused to its face shakes while it is being talked about.
+        const accused = accusedBy(line, group.members)
+        if (accused) react([accused], 'shake', 1500 + line.say.length * 40, signal)
         await say(speaker, line.say, { kind: 'say', to: listeners.map((id) => byId(id).name).join(' & ') }, signal)
       }
     }),
@@ -315,6 +437,9 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
     // The voter turns and points at its choice; the tally shows over the target's head.
     set((s) => ({ votes: { ...s.votes, [ballot.id]: target.id }, lookAt: { ...s.lookAt, [ballot.id]: target.id } }))
     voteTick()
+    react([target.id], 'shake', 1500, signal)
+    ghostsReact(target.role === 'werewolf', 1400, signal)
+    if (Math.random() < 0.4) ghostsThink(target.role === 'werewolf' ? 'ballot-right' : 'ballot-wrong', target, signal, { max: 1 })
     await say(byId(ballot.id), `I vote ${target.name}. ${ballot.reason}`.trim(), { kind: 'vote' }, signal)
   }
 
@@ -324,17 +449,54 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
   const leaders = [...tally].filter(([, n]) => n === top).map(([id]) => id)
   await wait(1200, signal)
   let jester: FruitState | null = null
+  const ballots = Object.entries(get().votes).map(([voter, target]) => ({ voter, target }))
   if (leaders.length > 1) {
+    record({ kind: 'vote', day: get().day, ballots, out: null, tied: leaders })
     log({ kind: 'system', text: `The vote is tied between ${leaders.map((id) => byId(id).name).join(' and ')}. Nobody is eliminated.` })
+    // Nobody, living or dead, knows what to make of that.
+    react(get().fruits.map((f) => f.id), 'puzzle', 2200, signal)
+    ghostsThink('tie', undefined, signal)
   } else {
     const out = byId(leaders[0])
+    // The condemned fruit gets a last word before it is flung out.
+    const lastWords = votes.find((v) => v.id === out.id)?.lastWords
+    if (lastWords) await say(out, lastWords, { kind: 'vote' }, signal)
+    // The sentence is carried out by the most aggressive fruit that voted for it.
+    const voters = alive().filter((f) => f.id !== out.id && get().votes[f.id] === out.id)
+    const shooter = voters.length ? voters.reduce((a, b) => (b.traits.aggression > a.traits.aggression ? b : a)) : undefined
+    if (shooter) {
+      set((s) => ({ execution: { shooterId: shooter.id, targetId: out.id, firing: false }, focusId: out.id, lookAt: { ...s.lookAt, [shooter.id]: out.id } }))
+      await wait(1100, signal)
+      set((s) => ({ execution: s.execution && { ...s.execution, firing: true } }))
+      gunshot()
+    }
     kill(out.id, false)
+    if (shooter) {
+      await wait(140, signal)
+      set((s) => ({ execution: s.execution && { ...s.execution, firing: false } }))
+    }
+    record({ kind: 'vote', day: get().day, ballots, out: out.id, tied: [] })
     log({ kind: 'system', text: `${out.name} is voted out with ${top} votes. They were ${ROLE_LABEL[out.role]}.` })
     if (out.role === 'jester') jester = out
-    else await hunterShot(out, revenge, signal)
+    else {
+      const living = alive()
+      if (out.role === 'werewolf') {
+        // Caught one: the village celebrates and any wolves left look glum.
+        cheer()
+        react(living.filter((f) => f.role !== 'werewolf').map((f) => f.id), 'cheer', 2400, signal)
+        react(living.filter((f) => f.role === 'werewolf').map((f) => f.id), 'sulk', 2400, signal)
+      } else {
+        // An innocent fruit: whoever voted for it hangs its head.
+        sulk()
+        react(living.filter((f) => get().votes[f.id] === out.id).map((f) => f.id), 'sulk', 2400, signal)
+      }
+      ghostsReact(out.role === 'werewolf', 2400, signal, out.id)
+      ghostsThink(out.role === 'werewolf' ? 'out-right' : 'out-wrong', out, signal)
+      await hunterShot(out, revenge, signal)
+    }
   }
   await wait(2800, signal)
-  set({ votes: {}, lookAt: {} })
+  set({ votes: {}, lookAt: {}, execution: null })
   return jester
 }
 
@@ -357,9 +519,14 @@ async function daytime(brain: Brain, revenge: string | null, signal: AbortSignal
 }
 
 function finish(side: Winner) {
-  set({ phase: 'over', winner: side, revealRoles: true, focusId: null })
+  // The jester was just voted out, so it gets back up for its own party.
+  if (side === 'jester') set((s) => ({ fruits: s.fruits.map((f) => (f.role === 'jester' ? { ...f, alive: true } : f)) }))
+  const dancers = alive()
+    .filter((f) => (side === 'werewolves' ? f.role === 'werewolf' : side === 'jester' ? f.role === 'jester' : f.role !== 'werewolf' && f.role !== 'jester'))
+    .map((f) => f.id)
+  set({ phase: 'over', winner: side, revealRoles: true, focusId: null, reactions: {}, execution: null, party: { at: performance.now(), dancers } })
   sendTo((f) => f.seat)
-  dawnChime()
+  startParty()
   const text: Record<Winner, string> = {
     village: 'Every werewolf is dead. The village wins!',
     werewolves: 'The werewolves have taken over. The werewolves win!',
@@ -369,6 +536,7 @@ function finish(side: Winner) {
 }
 
 async function run(signal: AbortSignal) {
+  stopParty()
   const s = get()
   const { rules } = s.settings
   const useGemini = s.settings.brain === 'gemini' && s.settings.apiKey
@@ -406,6 +574,11 @@ async function run(signal: AbortSignal) {
     chopped: {},
     focusId: null,
     attack: null,
+    party: null,
+    reactions: {},
+    execution: null,
+    ghostThoughts: {},
+    recap: [],
     calls: 0,
     paused: false,
     revealRoles: false,
@@ -441,5 +614,6 @@ export function startGame() {
 export function stopGame() {
   controller?.abort()
   controller = null
+  stopParty()
   get().backToSetup()
 }

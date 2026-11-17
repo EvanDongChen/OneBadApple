@@ -1,25 +1,18 @@
 import { create } from 'zustand'
 import { Vector3 } from 'three'
+import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
-import type { FruitDef, FruitState, LogEntry, Phase, Rules, Traits, Winner } from './types'
+import type { FruitDef, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
 const HOME_RING = 10.4
 const SEAT_RING = 3.8
 
-const NAMES = ['Pip', 'Clem', 'Zest', 'Dusk', 'Bosc', 'Key', 'Fuzz', 'Indigo', 'Bing', 'Tang', 'Mango', 'Fig']
-const QUIRKS = [
-  'Ends sentences with a nervous laugh.',
-  'Convinced it is the smartest fruit in the village.',
-  'Speaks like a tired old sailor.',
-  'Extremely polite, even when accusing someone.',
-  'Easily distracted by snacks and naps.',
-  'Dramatic. Everything is the end of the world.',
-  'Suspicious of anyone who is too nice.',
-  'Loves gossip more than the truth.',
+const NAMES = [
+  'Pip', 'Clem', 'Zest', 'Dusk', 'Bosc', 'Key', 'Fuzz', 'Indigo', 'Bing', 'Tang', 'Mango', 'Fig',
+  'Juju', 'Pomelo', 'Quince', 'Rind', 'Nectar', 'Pith', 'Sorbet', 'Jam', 'Peel', 'Mellow', 'Tart', 'Squash',
 ]
-
 export interface Settings {
   brain: 'test' | 'gemini'
   apiKey: string
@@ -70,25 +63,38 @@ export function maxWolves(fruitCount: number) {
 
 function randomTraits(): Traits {
   const r = () => Math.round(Math.random() * 10) / 10
+  // One quirk, sometimes two.
+  const presets = [...QUIRK_PRESETS].sort(() => Math.random() - 0.5)
   return {
     aggression: r(),
     honesty: r(),
     talkativeness: r(),
     suspicion: r(),
-    quirk: QUIRKS[Math.floor(Math.random() * QUIRKS.length)],
+    quirks: presets.slice(0, Math.random() < 0.3 ? 2 : 1).map((p) => p.id),
   }
 }
 
 let nextId = 1
 
-function makeFruit(index: number, taken: string[]): FruitDef {
-  const name = NAMES.find((n) => !taken.includes(n)) ?? `Fruit ${index + 1}`
-  return { id: `f${nextId++}`, name, kind: FRUIT_KINDS[index % FRUIT_KINDS.length], traits: randomTraits() }
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]
+}
+
+/** A new random villager: a name and a kind of fruit nobody in the roster has yet, if any are left. */
+function makeFruit(roster: FruitDef[]): FruitDef {
+  const names = NAMES.filter((n) => !roster.some((f) => f.name === n))
+  const kinds = FRUIT_KINDS.filter((k) => !roster.some((f) => f.kind === k))
+  return {
+    id: `f${nextId++}`,
+    name: names.length ? pick(names) : `Fruit ${roster.length + 1}`,
+    kind: pick(kinds.length ? kinds : FRUIT_KINDS),
+    traits: randomTraits(),
+  }
 }
 
 function makeRoster(count: number): FruitDef[] {
   const roster: FruitDef[] = []
-  for (let i = 0; i < count; i++) roster.push(makeFruit(i, roster.map((f) => f.name)))
+  for (let i = 0; i < count; i++) roster.push(makeFruit(roster))
   return roster
 }
 
@@ -136,6 +142,16 @@ export interface SimState {
   attack: { attackerId: string; victimId: string; striking: boolean } | null
   /** Fruits that died by the knife and fall apart in slices (others are flung whole). */
   chopped: Record<string, boolean | undefined>
+  /** The winners' dance party: when it started (for keeping time) and who is dancing. */
+  party: { at: number; dancers: string[] } | null
+  /** The vote being carried out: one voter draws a gun on the condemned fruit, and `firing` is the shot. */
+  execution: { shooterId: string; targetId: string; firing: boolean } | null
+  /** What each ghost is thinking right now, shown over its head. */
+  ghostThoughts: Record<string, string | undefined>
+  /** Body language each fruit is showing right now. */
+  reactions: Record<string, Reaction | undefined>
+  /** Everything worth retelling once the game is over. */
+  recap: RecapEvent[]
   /** Who everyone turns to look at when they have no partner. */
   focusId: string | null
   /** Ballots cast so far this vote: voter id to target id. */
@@ -176,6 +192,10 @@ function setupState(roster: FruitDef[]) {
     speech: {},
     thinking: {},
     attack: null,
+    party: null,
+    execution: null,
+    ghostThoughts: {},
+    reactions: {},
     chopped: {},
     focusId: null,
     votes: {},
@@ -186,6 +206,7 @@ function setupState(roster: FruitDef[]) {
 export const useSim = create<SimState>((set, get) => ({
   ...setupState(initialRoster),
   log: [],
+  recap: [],
   speed: 1,
   revealRoles: false,
   showThoughts: false,
@@ -202,7 +223,7 @@ export const useSim = create<SimState>((set, get) => ({
     set((s) =>
       s.roster.length >= MAX_FRUITS
         ? s
-        : setupState([...s.roster, makeFruit(s.roster.length, s.roster.map((f) => f.name))]),
+        : setupState([...s.roster, makeFruit(s.roster)]),
     ),
   removeFruit: (id) =>
     set((s) => (s.roster.length <= MIN_FRUITS ? s : setupState(s.roster.filter((f) => f.id !== id)))),
@@ -219,3 +240,6 @@ export const useSim = create<SimState>((set, get) => ({
 
 /** Live world positions, written by each Fruit every frame. Kept out of React state. */
 export const fruitPositions = new Map<string, Vector3>()
+
+// Dev builds expose the store on the window, so the game can be poked at from the console.
+if (import.meta.env.DEV) Object.assign(window, { __sim: { useSim, fruitPositions } })

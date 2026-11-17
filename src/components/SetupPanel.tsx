@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { startGame } from '../sim/engine'
 import { listGeminiModels } from '../sim/geminiBrain'
 import { unlockAudio } from '../sim/sfx'
+import { MAX_QUIRKS, presetOf, QUIRK_PRESETS, quirkLabel, quirkText } from '../sim/quirks'
 import { MAX_FRUITS, MIN_FRUITS, maxWolves, useSim } from '../sim/store'
 import { FRUIT_KINDS, TRAIT_KEYS } from '../sim/types'
 import type { FruitKind } from '../sim/types'
@@ -12,6 +13,61 @@ const TRAIT_LABELS: Record<(typeof TRAIT_KEYS)[number], string> = {
   honesty: 'Honesty',
   talkativeness: 'Talkative',
   suspicion: 'Suspicion',
+}
+
+/** What a dragged quirk carries: which quirk, and which villager it came off, if any. */
+interface Carried {
+  quirk: string
+  from?: string
+}
+
+function carried(event: React.DragEvent): Carried | null {
+  try {
+    const data = JSON.parse(event.dataTransfer.getData('text/plain'))
+    return typeof data?.quirk === 'string' ? data : null
+  } catch {
+    return null
+  }
+}
+
+/** A quirk as a pill you can drag. In the tray it can also be tapped to pick it up; on a villager it has a remove button. */
+function Chip({ quirk, from, held, onPick, onRemove }: { quirk: string; from?: string; held?: boolean; onPick?(): void; onRemove?(): void }) {
+  return (
+    <span
+      className={`chip${presetOf(quirk) ? '' : ' custom'}${held ? ' held' : ''}`}
+      style={{ '--tint': presetOf(quirk)?.tint } as React.CSSProperties}
+      title={quirkText(quirk)}
+      draggable
+      role={onPick ? 'button' : undefined}
+      tabIndex={onPick ? 0 : undefined}
+      aria-pressed={onPick ? !!held : undefined}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify({ quirk, from }))
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      onClick={onPick}
+      onKeyDown={(e) => {
+        if (onPick && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          onPick()
+        }
+      }}
+    >
+      {quirkLabel(quirk)}
+      {onRemove && (
+        <button
+          className="chip-x"
+          aria-label={`Remove ${quirkLabel(quirk)}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  )
 }
 
 /** Pre-game screen: pick the brain, edit each fruit's personality, start the simulation. */
@@ -28,6 +84,33 @@ export default function SetupPanel() {
   const [openId, setOpenId] = useState<string | null>(roster[0]?.id ?? null)
   const [models, setModels] = useState<string[]>([])
   const [modelStatus, setModelStatus] = useState('')
+  // Quirks: the one picked up by tapping, the ones the user has written, and the card being dragged over.
+  const [held, setHeld] = useState<string | null>(null)
+  const [custom, setCustom] = useState<string[]>([])
+  const [draft, setDraft] = useState('')
+  const [overId, setOverId] = useState<string | null>(null)
+
+  function take(id: string, quirk: string) {
+    const fruit = roster.find((f) => f.id === id)
+    if (fruit) updateFruit(id, { traits: { quirks: fruit.traits.quirks.filter((q) => q !== quirk) } })
+  }
+
+  /** Give a villager a quirk. If it was dragged off another villager, it moves rather than copies. */
+  function give(id: string, quirk: string, from?: string) {
+    const fruit = roster.find((f) => f.id === id)
+    if (!fruit || from === id || fruit.traits.quirks.includes(quirk) || fruit.traits.quirks.length >= MAX_QUIRKS) return
+    updateFruit(id, { traits: { quirks: [...fruit.traits.quirks, quirk] } })
+    if (from) take(from, quirk)
+  }
+
+  function makeQuirk() {
+    const text = draft.trim()
+    if (!text) return
+    if (!presetOf(text) && !custom.includes(text)) setCustom([...custom, text])
+    // Pick the new quirk up straight away, ready to hand to a villager.
+    setHeld(text)
+    setDraft('')
+  }
 
   const needsKey = settings.brain === 'gemini' && !settings.apiKey.trim()
 
@@ -49,7 +132,14 @@ export default function SetupPanel() {
 
   return (
     <aside className="panel setup">
-      <h1>One Bad Apple</h1>
+      <div className="brand">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
+        <h1>
+          One Bad
+          <br />
+          Apple
+        </h1>
+      </div>
       <p className="tagline">A village of fruit plays Werewolf. One of them is rotten.</p>
 
       <section>
@@ -167,16 +257,75 @@ export default function SetupPanel() {
             </button>
           </div>
         </div>
+        <div
+          className="tray"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            // Dragging a quirk off a villager and back to the tray removes it.
+            e.preventDefault()
+            const drop = carried(e)
+            if (drop?.from) take(drop.from, drop.quirk)
+          }}
+        >
+          <h2>Quirks</h2>
+          <p className="muted">
+            {held
+              ? `Now tap a villager to give it "${quirkLabel(held)}". Tap the quirk again to put it down.`
+              : 'Drag a quirk onto a villager, or tap a quirk and then a villager. Up to three each.'}
+          </p>
+          <div className="chips">
+            {[...QUIRK_PRESETS.map((p) => p.id), ...custom].map((quirk) => (
+              <Chip key={quirk} quirk={quirk} held={held === quirk} onPick={() => setHeld(held === quirk ? null : quirk)} />
+            ))}
+          </div>
+          <form
+            className="row"
+            onSubmit={(e) => {
+              e.preventDefault()
+              makeQuirk()
+            }}
+          >
+            <input value={draft} maxLength={80} placeholder="Or write your own: Only speaks in questions" onChange={(e) => setDraft(e.target.value)} />
+            <button type="submit" disabled={!draft.trim()}>
+              Make
+            </button>
+          </form>
+        </div>
+
         {roster.map((fruit) => {
           const open = openId === fruit.id
+          const { quirks } = fruit.traits
+          const room = quirks.length < MAX_QUIRKS
           return (
-            <div key={fruit.id} className="card">
-              <button className="card-head" onClick={() => setOpenId(open ? null : fruit.id)}>
+            <div
+              key={fruit.id}
+              className={`card${overId === fruit.id ? ' over' : ''}${held && room && !quirks.includes(held) ? ' target' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setOverId(fruit.id)
+              }}
+              onDragLeave={() => setOverId((id) => (id === fruit.id ? null : id))}
+              onDrop={(e) => {
+                e.preventDefault()
+                setOverId(null)
+                const drop = carried(e)
+                if (drop) give(fruit.id, drop.quirk, drop.from)
+              }}
+            >
+              {/* While a quirk is picked up, tapping a villager hands it over instead of opening the card. */}
+              <button className="card-head" onClick={() => (held ? give(fruit.id, held) : setOpenId(open ? null : fruit.id))}>
                 <span className="dot" style={{ background: LOOKS[fruit.kind].color }} />
                 <b>{fruit.name}</b>
                 <span className="muted">{fruit.kind}</span>
                 <span className="chev">{open ? '−' : '+'}</span>
               </button>
+              <div className="card-quirks">
+                {quirks.map((quirk) => (
+                  <Chip key={quirk} quirk={quirk} from={fruit.id} onRemove={() => take(fruit.id, quirk)} />
+                ))}
+                {!quirks.length && <span className="muted">No quirks yet. Drop one here.</span>}
+                {!room && <span className="muted">Full</span>}
+              </div>
               {open && (
                 <div className="card-body">
                   <div className="row">
@@ -207,15 +356,6 @@ export default function SetupPanel() {
                       <span className="num">{Math.round(fruit.traits[key] * 10)}</span>
                     </label>
                   ))}
-                  <label>
-                    Quirk
-                    <input
-                      value={fruit.traits.quirk}
-                      maxLength={120}
-                      placeholder="e.g. Talks like a pirate"
-                      onChange={(e) => updateFruit(fruit.id, { traits: { quirk: e.target.value } })}
-                    />
-                  </label>
                   <button className="danger" onClick={() => removeFruit(fruit.id)} disabled={roster.length <= MIN_FRUITS}>
                     Remove {fruit.name}
                   </button>

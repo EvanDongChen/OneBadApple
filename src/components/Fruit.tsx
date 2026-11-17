@@ -4,7 +4,9 @@ import { Html } from '@react-three/drei'
 import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
+import { PARTY_BEAT_MS } from '../sim/sfx'
 import { fruitPositions, useSim } from '../sim/store'
+import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
@@ -22,6 +24,8 @@ const YAW_STIFFNESS = 40
 const YAW_DAMPING = 8
 const WALK_SPEED = 2.4
 const WALK_GAIN = 6
+const MAX_SPEED = 12 // fastest a fruit may go, however far the game is sped up
+const BRAKE_GAIN = 4 // slow down this hard on the way in, so fast fruits don't overshoot
 const LEAN_GAIN = 1.5
 const WADDLE_TORQUE = 9
 const ARRIVE_DISTANCE = 0.35
@@ -39,7 +43,8 @@ const FOOT_Y = 0.07
 // Face: tiny dot eyes and a flat 2D mouth that snaps between drawn shapes
 // while talking, like animatic lip sync. Shape 0 is the resting line.
 const EYE_RADIUS = 0.035
-const MOUTH_SHAPES = 5
+const MOUTH_SHAPES = 5 // shapes used for talking; one more, a frown, is kept for sulking
+const FROWN = 5
 const MOUTH_HOLD_MIN = 0.08 // seconds each shape is held
 const MOUTH_HOLD_JITTER = 0.08
 
@@ -92,11 +97,16 @@ export default function Fruit({ id }: { id: string }) {
   // During the vote: who this fruit is pointing at, and how many are pointing at it.
   const pointAt = useSim((s) => s.votes[id])
   const votesAgainst = useSim((s) => Object.values(s.votes).filter((target) => target === id).length)
+  const reaction = useSim((s) => s.reactions[id])
+  // Carrying out the vote: this fruit holds the gun, and `firing` is the moment of the shot.
+  const gunning = useSim((s) => s.execution?.shooterId === id)
+  const firing = useSim((s) => s.execution?.shooterId === id && s.execution.firing)
   const armed = useSim((s) => s.attack?.attackerId === id)
   const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
   // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
   const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
   const knife = useRef<Group>(null)
+  const gun = useRef<Group>(null)
   const { alive, kind } = fruit
   // Where the face and arms sit on this fruit's particular shape.
   const face = useMemo(() => anchors(kind), [kind])
@@ -108,6 +118,7 @@ export default function Fruit({ id }: { id: string }) {
   const visual = useRef<Group>(null)
   const overlay = useRef<Group>(null)
   const mouthMeshes = useRef<(Mesh | null)[]>([])
+  const eyeMeshes = useRef<(Mesh | null)[]>([])
   const mouthShape = useRef(0)
   const mouthTimer = useRef(0)
   const armMeshes = useRef<(Mesh | null)[]>([null, null, null, null])
@@ -117,6 +128,11 @@ export default function Fruit({ id }: { id: string }) {
   const footMeshes = useRef<(Mesh | null)[]>([null, null])
   const feet = useRef<Foot[]>([makeFoot(spawn[0] - FOOT_SPREAD, spawn[2]), makeFoot(spawn[0] + FOOT_SPREAD, spawn[2])])
   const waddlePhase = useRef(Math.random() * Math.PI * 2)
+  /** Last beat of the party music this fruit hopped on. */
+  const lastBeat = useRef(-1)
+  const lastHop = useRef(-1)
+  /** Puts each fruit's cheering hops slightly out of step with its neighbours'. */
+  const hopOffset = useRef(Math.random())
   // Slightly uneven eyes make the face derpier.
   const eyeOffsets = useMemo(() => [(Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.04], [])
 
@@ -155,6 +171,33 @@ export default function Fruit({ id }: { id: string }) {
     b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.5, y: 0, z: (Math.random() - 0.5) * m * 0.5 }, true)
   }, [speechText, alive])
 
+  // A gasp: jump back from whatever everyone is staring at. Each fruit is a touch late or early.
+  useEffect(() => {
+    if (reaction !== 'gasp' || !alive) return
+    const timer = setTimeout(() => {
+      const b = body.current
+      if (!b) return
+      const m = b.mass()
+      const r = b.rotation()
+      v.tmp.set(0, 0, 1).applyQuaternion(v.quat.set(r.x, r.y, r.z, r.w))
+      b.applyImpulse({ x: -v.tmp.x * m * 1.8, y: m * 3.6, z: -v.tmp.z * m * 1.8 }, true)
+      b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.6, y: 0, z: (Math.random() - 0.5) * m * 0.6 }, true)
+    }, Math.random() * 220)
+    return () => clearTimeout(timer)
+  }, [reaction, alive])
+
+  // The gun kicks the shooter back.
+  useEffect(() => {
+    const b = body.current
+    const targetId = useSim.getState().execution?.targetId
+    const target = targetId ? fruitPositions.get(targetId) : undefined
+    if (!firing || !b || !target) return
+    const t = b.translation()
+    const d = Math.hypot(target.x - t.x, target.z - t.z) || 1
+    const m = b.mass()
+    b.applyImpulse({ x: (-(target.x - t.x) / d) * m * 2.2, y: m * 1.5, z: (-(target.z - t.z) / d) * m * 2.2 }, true)
+  }, [firing])
+
   // The wolf lunges at its victim when it strikes.
   useEffect(() => {
     const b = body.current
@@ -190,8 +233,13 @@ export default function Fruit({ id }: { id: string }) {
     b.setAngularDamping(1.2)
     const m = b.mass()
     const t = b.translation()
-    const out = Math.hypot(t.x, t.z) || 1
-    b.applyImpulse({ x: (t.x / out) * m * 7, y: m * 10, z: (t.z / out) * m * 7 }, true)
+    // Shot: thrown straight back from the gun. Otherwise (the hunter's revenge) flung outward.
+    const execution = useSim.getState().execution
+    const shooter = execution?.targetId === id ? fruitPositions.get(execution.shooterId) : undefined
+    const fromX = shooter ? t.x - shooter.x : t.x
+    const fromZ = shooter ? t.z - shooter.z : t.z
+    const out = Math.hypot(fromX, fromZ) || 1
+    b.applyImpulse({ x: (fromX / out) * m * 7, y: m * 10, z: (fromZ / out) * m * 7 }, true)
     b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 3, y: (Math.random() - 0.5) * m, z: (Math.random() - 0.5) * m * 3 }, true)
   }, [alive])
 
@@ -214,7 +262,9 @@ export default function Fruit({ id }: { id: string }) {
     v.fwd.normalize()
 
     // Hover spring: holds the body up on its legs, with bounce. Only pushes, never pulls down.
-    const heightError = HOVER_HEIGHT - t.y
+    // A sulking fruit sags on its legs.
+    const mood = sim.reactions[id]
+    const heightError = HOVER_HEIGHT - (mood === 'sulk' ? 0.16 : 0) - t.y
     if (heightError > -0.2) {
       const lift = GRAVITY + HOVER_STIFFNESS * heightError - HOVER_DAMPING * lv.y
       if (lift > 0) b.applyImpulse({ x: 0, y: m * lift * DT, z: 0 }, true)
@@ -229,8 +279,11 @@ export default function Fruit({ id }: { id: string }) {
     v.want.set(goalX - t.x, 0, goalZ - t.z)
     const distance = v.want.length()
     const walking = distance > (followPos ? FOLLOW_DISTANCE : ARRIVE_DISTANCE)
-    // The attacking wolf moves at double speed, both on the way there and on the way home.
-    const speed = WALK_SPEED * (sim.attack?.attackerId === id ? 2 : 1)
+    // Fruits walk faster when the game is sped up. The attacking wolf moves at double
+    // speed, both on the way there and on the way home.
+    const top = Math.min(MAX_SPEED, WALK_SPEED * sim.speed * (sim.attack?.attackerId === id ? 2 : 1))
+    const left = distance - (followPos ? FOLLOW_DISTANCE : 0)
+    const speed = Math.min(top, Math.max(WALK_SPEED * 0.5, left * BRAKE_GAIN))
     if (walking) v.want.multiplyScalar(speed / distance)
     else v.want.set(0, 0, 0)
 
@@ -260,8 +313,22 @@ export default function Fruit({ id }: { id: string }) {
 
     // Side-to-side waddle while walking.
     if (walking) {
-      waddlePhase.current += DT * 11
+      waddlePhase.current += DT * 11 * Math.min(2, sim.speed)
       v.torque.addScaledVector(v.fwd, Math.sin(waddlePhase.current) * WADDLE_TORQUE)
+    }
+
+    // Body language. Shaking: a nervous rattle. Sulking: head hung forward. Cheering: quick hops.
+    if (mood === 'shake') {
+      v.torque.x += (Math.random() - 0.5) * 90
+      v.torque.z += (Math.random() - 0.5) * 90
+    } else if (mood === 'sulk') {
+      v.torque.add(v.tmp.crossVectors(UP, v.fwd).multiplyScalar(20))
+    } else if (mood === 'cheer') {
+      const hop = Math.floor(performance.now() / 380 + hopOffset.current)
+      if (hop !== lastHop.current) {
+        lastHop.current = hop
+        b.applyImpulse({ x: 0, y: m * 3.8, z: 0 }, true)
+      }
     }
 
     // Face the direction of travel; when standing, face who we walked up to,
@@ -273,6 +340,20 @@ export default function Fruit({ id }: { id: string }) {
       const focus = followPos ?? (lookId ? fruitPositions.get(lookId) : undefined)
       v.tmp.set((focus?.x ?? 0) - t.x, 0, (focus?.z ?? 0) - t.z)
     }
+    // Dance party: hop on every beat, rock from side to side, and spin on the spot.
+    const party = sim.party
+    if (party && !walking && party.dancers.includes(id)) {
+      const beat = (performance.now() - party.at) / PARTY_BEAT_MS
+      const index = Math.floor(beat)
+      if (index !== lastBeat.current) {
+        lastBeat.current = index
+        b.applyImpulse({ x: 0, y: m * 4.2, z: 0 }, true)
+        v.torque.addScaledVector(v.fwd, (index % 2 ? 1 : -1) * 28)
+      }
+      const turn = beat * 1.3 + waddlePhase.current
+      v.tmp.set(Math.sin(turn), 0, Math.cos(turn))
+    }
+
     if (v.tmp.lengthSq() > 1e-4) {
       v.tmp.normalize()
       const yawError = Math.atan2(v.fwd.z * v.tmp.x - v.fwd.x * v.tmp.z, v.fwd.dot(v.tmp))
@@ -295,11 +376,17 @@ export default function Fruit({ id }: { id: string }) {
     v.vel.set(lv.x, 0, lv.z)
     v.quat.set(r.x, r.y, r.z, r.w)
     fruitPositions.get(id)?.copy(v.pos)
+    const party = useSim.getState().party
+    const dancing = alive && !!party && party.dancers.includes(id)
+    const beat = party ? (performance.now() - party.at) / PARTY_BEAT_MS : performance.now() / 190
+    const mood = alive && !dancing ? reaction : undefined
 
     // Squash and stretch from vertical speed.
     if (visual.current) {
       const stretch = Math.max(-0.2, Math.min(0.2, lv.y * 0.05))
       visual.current.scale.set(1 - stretch * 0.5, 1 + stretch, 1 - stretch * 0.5)
+      // Shaking fruits also judder from side to side.
+      visual.current.position.x = mood === 'shake' ? Math.sin(performance.now() * 0.09) * 0.035 : 0
     }
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
@@ -317,6 +404,19 @@ export default function Fruit({ id }: { id: string }) {
     } else {
       mouthTimer.current = 0
     }
+    // Dancers and cheerers grin, gaspers gape, sulkers frown, and the accused's lip wobbles.
+    if (!speechText) {
+      if (dancing || mood === 'cheer') shape = 4
+      else if (mood === 'gasp') shape = 3
+      else if (mood === 'sulk') shape = FROWN
+      else if (mood === 'shake') shape = Math.floor(performance.now() / 70) % 2
+      else if (mood === 'puzzle') shape = 1
+    }
+    // Eyes go wide with shock or fear and droop when sulking.
+    eyeMeshes.current.forEach((mesh) => {
+      if (mood === 'sulk') mesh?.scale.set(1.1, 0.4, 1)
+      else mesh?.scale.setScalar(mood === 'gasp' ? 1.8 : mood === 'shake' ? 1.35 : 1)
+    })
     mouthShape.current = shape
     mouthMeshes.current.forEach((mesh, i) => {
       if (mesh) mesh.visible = i === shape
@@ -346,6 +446,13 @@ export default function Fruit({ id }: { id: string }) {
         v.fwd.set(0, 0, 1).applyQuaternion(v.quat)
         arm[0].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, 0.26).addScaledVector(UP, 0.05), 0.5)
         arm[1].pos.lerp(v.tmp.copy(v.shoulder).addScaledVector(v.fwd, striking ? 0.6 : 0.4).addScaledVector(UP, striking ? 0.05 : 0.5), 0.5)
+      }
+      // Dancing, cheering or gasping: both arms in the air, pumping in turn with the beat.
+      if (dancing || mood === 'cheer' || mood === 'gasp') {
+        const pump = Math.sin(beat * Math.PI + i * Math.PI)
+        v.tmp.set(side, 0, 0).applyQuaternion(v.quat)
+        arm[0].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.22).addScaledVector(UP, 0.16), 0.5)
+        arm[1].pos.lerp(v.hip.copy(v.shoulder).addScaledVector(v.tmp, 0.26 + pump * 0.1).addScaledVector(UP, 0.5 + pump * 0.12), 0.5)
       }
       // Voting: the right arm points straight at the chosen fruit.
       const pointed = alive && i === 1 && pointAt ? fruitPositions.get(pointAt) : undefined
@@ -380,6 +487,17 @@ export default function Fruit({ id }: { id: string }) {
       }
     }
 
+    // The gun sits in the right hand, which is already pointing at the condemned fruit.
+    if (gun.current) {
+      gun.current.visible = !!gunning && alive
+      const targetId = useSim.getState().execution?.targetId
+      const aim = targetId ? fruitPositions.get(targetId) : undefined
+      if (gunning && aim) {
+        gun.current.position.copy(arms.current[1][1].pos)
+        gun.current.lookAt(aim.x, gun.current.position.y, aim.z)
+      }
+    }
+
     // Legs. Alive: procedural stepping, a foot stays planted until the body drifts away
     // from it. Dead: the legs just stick out limply from the body.
     v.fwd.set(0, 0, 1).applyQuaternion(v.quat).setY(0)
@@ -387,6 +505,8 @@ export default function Fruit({ id }: { id: string }) {
     v.fwd.normalize()
     v.right.set(v.fwd.z, 0, -v.fwd.x)
 
+    // Legs step quicker when the fruit is hurrying.
+    const stride = Math.max(1, v.vel.length() / WALK_SPEED)
     feet.current.forEach((foot, i) => {
       const side = i === 0 ? -1 : 1
       const other = feet.current[1 - i]
@@ -405,7 +525,7 @@ export default function Fruit({ id }: { id: string }) {
           foot.t = 0
         }
       } else {
-        foot.t = Math.min(1, foot.t + delta / STEP_TIME)
+        foot.t = Math.min(1, foot.t + (delta / STEP_TIME) * stride)
         foot.pos.lerpVectors(foot.from, foot.to, foot.t)
         foot.pos.y = FOOT_Y + Math.sin(foot.t * Math.PI) * STEP_LIFT
       }
@@ -425,7 +545,7 @@ export default function Fruit({ id }: { id: string }) {
           {/* Eyes: dots while alive, little crosses once dead. */}
           {[-1, 1].map((side, i) => (
             <group key={side} position={[side * EYE_SPREAD, face.y + 0.08 + eyeOffsets[i], face.eyeZ * 0.985]}>
-              <mesh visible={alive}>
+              <mesh visible={alive} ref={(m) => void (eyeMeshes.current[i] = m)}>
                 <sphereGeometry args={[EYE_RADIUS, 12, 12]} />
                 <meshBasicMaterial color={LIMB_COLOR} />
               </mesh>
@@ -438,7 +558,7 @@ export default function Fruit({ id }: { id: string }) {
             </group>
           ))}
 
-          {/* Flat mouth shapes, one visible at a time: line, short line, "o", open oval, open grin. */}
+          {/* Flat mouth shapes, one visible at a time: line, short line, "o", open oval, open grin, frown. */}
           <group position={[0, face.y - 0.06, face.mouthZ + 0.008]}>
             {[
               <planeGeometry args={[0.15, 0.022]} />,
@@ -446,13 +566,14 @@ export default function Fruit({ id }: { id: string }) {
               <ringGeometry args={[0.028, 0.05, 20]} />,
               <circleGeometry args={[0.055, 20]} />,
               <circleGeometry args={[0.08, 20, Math.PI, Math.PI]} />,
+              <ringGeometry args={[0.05, 0.072, 20, 1, 0, Math.PI]} />,
             ].map((geometry, i) => (
               <mesh
                 key={i}
                 ref={(m) => void (mouthMeshes.current[i] = m)}
                 visible={i === 0}
                 scale={i === 3 ? [0.8, 1.1, 1] : 1}
-                position={[0, i === 4 ? 0.03 : 0, 0]}
+                position={[0, i === 4 ? 0.03 : i === FROWN ? -0.045 : 0, 0]}
               >
                 {geometry}
                 <meshBasicMaterial color={LIMB_COLOR} />
@@ -476,6 +597,22 @@ export default function Fruit({ id }: { id: string }) {
         <mesh castShadow position={[0, 0.32, 0.01]}>
           <boxGeometry args={[0.02, 0.4, 0.11]} />
           <meshStandardMaterial color="#eef2f5" emissive="#aeb8c2" emissiveIntensity={0.7} roughness={0.3} />
+        </mesh>
+      </group>
+
+      {/* The gun: barrel along its own forward axis, grip below, and a flash at the muzzle for the shot. */}
+      <group ref={gun} visible={false} scale={1.6}>
+        <mesh castShadow position={[0, 0.02, 0.1]}>
+          <boxGeometry args={[0.05, 0.07, 0.3]} />
+          <meshStandardMaterial color="#2b2f36" metalness={0.4} roughness={0.4} />
+        </mesh>
+        <mesh castShadow position={[0, -0.07, -0.01]} rotation={[0.25, 0, 0]}>
+          <boxGeometry args={[0.05, 0.14, 0.07]} />
+          <meshStandardMaterial color="#5a3a1c" />
+        </mesh>
+        <mesh visible={!!firing} position={[0, 0.02, 0.36]}>
+          <sphereGeometry args={[0.1, 10, 8]} />
+          <meshBasicMaterial color="#ffd23f" />
         </mesh>
       </group>
 
@@ -503,8 +640,10 @@ export default function Fruit({ id }: { id: string }) {
       </group>
 
       <group ref={overlay}>
+        {/* Once a fruit is dead its ghost carries the name tag instead. */}
+        {alive && (
         <Html center zIndexRange={[10, 0]}>
-          <div className={`fruit-tag${alive ? '' : ' dead'}`}>
+          <div className="fruit-tag">
             {speechText && alive && (
               <div className="bubble">
                 <RichText text={speechText} />
@@ -523,12 +662,14 @@ export default function Fruit({ id }: { id: string }) {
               </div>
             )}
             {votesAgainst > 0 && alive && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
+            {reaction && <Emote reaction={reaction} />}
             <div className="name">
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
             </div>
           </div>
         </Html>
+        )}
       </group>
     </>
   )

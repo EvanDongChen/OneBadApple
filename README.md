@@ -1,84 +1,228 @@
+<div align="center">
+
+<img src="public/logo.svg" alt="" width="120">
+
 # One Bad Apple
 
-A village of little fruits with legs plays Werewolf (Mafia) while you watch. One of them is rotten.
+**A village of little fruits with legs plays Werewolf while you watch. One of them is rotten.**
 
-You set up the villagers and their personalities, press start, and the game plays itself in 3D: the fruits waddle around on wobbly physics, pair off to gossip, vote someone out, and get chopped up in the night.
+[![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![three.js](https://img.shields.io/badge/three.js-react--three--fiber-000000?logo=threedotjs&logoColor=white)](https://r3f.docs.pmnd.rs)
+[![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev)
+[![Gemini](https://img.shields.io/badge/AI-Gemini%20(optional)-8e75b2?logo=googlegemini&logoColor=white)](https://aistudio.google.com)
 
-## What it does
+[**Play in your browser**](https://evandongchen.github.io/OneBadApple/) · [Run it locally](#-quick-start) · [How a day goes](#-how-a-day-goes) · [Using Gemini](#-using-gemini)
 
-- **Two brains.** In **Gemini AI** mode, Google's Gemini decides everything each fruit does and says. In **No AI** mode, each fruit decides from its personality sliders using built-in rules and a library of about 280 stock lines. No AI mode needs no key and costs nothing.
-- **Personalities.** Every fruit has a name, a fruit type, four sliders (aggression, honesty, talkativeness, suspicion) and a free-text quirk. The quirk is only used in Gemini mode.
-- **Roles.** Werewolves, villagers, and optionally a seer, a doctor, a hunter (takes someone down when it dies) and a jester (wins alone if voted out). You choose how many wolves and which roles are in play.
-- **Private conversations.** Each day the fruits split into pairs and talk at the same time, for as many rounds as you set. Only the fruits in a conversation hear it, so rumours spread from fruit to fruit and can be passed on wrongly.
-- **Minds you can read.** Each fruit keeps a private thought and a trust score for every other fruit. Click a fruit in the Villagers panel to see them, or turn on **Show thoughts** to float every thought over its owner's head.
-- **Spectator controls.** Pause, 1x/2x/4x speed, peek at roles, and sound on or off.
+<img src="docs/screenshots/hero.png" alt="Ten fruits with stick legs and tiny faces standing in a circle: a pear, a plum, a lemon, an orange, an apple, a kiwi, a cherry, a blueberry, a peach and a lime" width="820">
 
-## How a day goes
+</div>
 
-1. **Night.** Everyone walks home. The wolf runs over with a knife and slices its victim, unless the doctor guarded them. The seer learns one fruit's side.
-2. **Dawn.** The village finds out who died and what they were.
-3. **Talking it over.** The fruits pair off for one or more rounds of private conversation.
-4. **The vote.** Everyone gathers in the circle, points at their choice and says why. The fruit with the most votes is flung out; a tie eliminates nobody.
+<br>
 
-The village wins when every werewolf is dead. The werewolves win when they make up at least half of the living fruits. The jester wins if it is voted out.
+You set up the villagers and their personalities, press start, and the game plays itself in 3D. The fruits waddle about on wobbly physics, pair off to gossip, point fingers at the vote, and get sliced up in the night.
 
-## Running it
+Nobody plays. You just watch it go wrong.
 
-You need [Node.js](https://nodejs.org) 20 or newer.
+## ✨ What's in it
+
+| | |
+|---|---|
+| 🧠 **Two brains** | **Gemini AI** decides everything each fruit does and says. **No AI** runs on built-in personality rules and about 280 stock lines, with no key and no cost. |
+| 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and up to three quirks. Drag quirks like *Dramatic*, *Sassy* or *Pirate* onto a villager, or write your own. |
+| 🐺 **Roles** | Werewolves and villagers, plus an optional seer, doctor, hunter and jester. You choose how many wolves and which roles are in play. |
+| 🤫 **Private conversations** | Fruits pair off and talk at the same time. Only the fruits in a conversation hear it, so rumours spread by word of mouth and get passed on wrongly. |
+| 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
+| 🔪 **Fruit physics** | Wobbly walking, floppy arms, stepping legs, and victims that fall apart into slices shaped like the fruit they were. |
+| 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong, each with a comic mark over its head. |
+| 👻 **Ghosts** | Dead fruits rise as see-through ghosts and drift around the edge of the stage. They know who everyone really was, cheer or despair as the living vote, and think out loud about it where only you can read it. |
+| 🐺 **Wolf whispers** | With two or more werewolves, the pack slips out at night to argue over the victim, and you can read every word. |
+| 💬 **Last words** | A fruit that is voted out gets one final line: a plea, a curse, or a caught wolf's smug confession. Then the most aggressive fruit that voted for it carries out the sentence with a gun. |
+| 🗯️ **Readable bubbles** | Speech bubbles that would cover each other on screen are stacked clear of one another, whatever angle you watch from. |
+| 🗣️ **Voices** | Every fruit babbles in soft musical blips that follow the rhythm of its line: the kind of fruit sets the pitch, and chatty fruits gabble faster. All the voices share one scale, so they stay in tune with each other. When several conversations run at once you hear the one nearest the camera. |
+| 📜 **Recap** | When the game ends, read back who killed whom, how every vote went, and when each fruit changed its mind about another, marked right or wrong. |
+| 🍐 **Thirteen fruits** | Apple, orange, lemon, plum, pear, lime, peach, blueberry, cherry, kiwi, banana, strawberry and watermelon, each with its own shape. Every visit starts with a random village. |
+| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, and sound on or off. |
+
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/setup.png" alt="The setup screen, with a choice of Gemini AI or No AI, house rules for werewolves and roles, and a list of villagers">
+      <p align="center"><b>Set up the village</b><br>Pick the brain, the roles and each fruit's personality.</p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/talk.png" alt="Fruits split into two groups, each with its own speech bubble, and a log of who said what to whom">
+      <p align="center"><b>Talking it over</b><br>Small groups talk at once. The log shows who said what to whom.</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/screenshots/vote.png" alt="Fruits gathered in a circle to vote. Two red crosses float over the lemon, and a side panel shows the orange's private thought and its trust in each other fruit">
+      <p align="center"><b>The vote, and a mind laid open</b><br>Crosses stack up over whoever is being voted for. On the right, the seer's private thought and how far it trusts everyone else.</p>
+    </td>
+  </tr>
+</table>
+
+## 🚀 Quick start
+
+You need [Node.js](https://nodejs.org) 22 or newer.
 
 ```bash
+git clone https://github.com/EvanDongChen/OneBadApple.git
+cd OneBadApple
 npm install
 npm run dev
 ```
 
-Then open the address it prints (normally http://localhost:5173/OneBadApple/).
+Open the address it prints, normally http://localhost:5173/OneBadApple/, choose **No AI**, and press **Wake the village**.
 
-`npm run build` makes a production build in `dist/`, and `npm run preview` serves that build locally.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build` | Type-check and make a production build in `dist/` |
+| `npm run preview` | Serve the production build locally |
 
-## Using Gemini
+## 🌗 How a day goes
+
+1. **Night.** Everyone walks home. If there is more than one wolf, they meet to whisper about who to kill. A wolf runs over with a knife and slices its victim, unless the doctor guarded them. The seer learns one fruit's side.
+2. **Dawn.** The village finds out who died and what they were.
+3. **Talking it over.** The fruits pair off for one or more rounds of private conversation.
+4. **The vote.** Everyone gathers in the circle, points at their choice and says why. The fruit with the most votes says its last words and is shot. A tie eliminates nobody.
+
+### Who wins
+
+| Side | Wins when |
+|---|---|
+| 🏡 Village | Every werewolf is dead |
+| 🐺 Werewolves | They make up at least half of the living fruits |
+| 🃏 Jester | The village votes it out |
+
+### Roles
+
+| Role | Side | What it does |
+|---|---|---|
+| Werewolf | Wolves | Kills one fruit each night and lies about it by day |
+| Villager | Village | No powers. Talks and votes |
+| Seer | Village | Learns each night whether one fruit is a werewolf |
+| Doctor | Village | Protects one fruit from the knife each night |
+| Hunter | Village | Takes one fruit of its choice down with it when it dies |
+| Jester | Itself | Tries to get voted out without making it obvious |
+
+## 🤖 Using Gemini
 
 1. Get an API key from [Google AI Studio](https://aistudio.google.com/apikey).
 2. On the setup screen choose **Gemini AI** and paste the key.
 
-The key is kept in your browser's local storage and is sent only to Google. It is never part of the site or the repository, so everyone who uses the hosted page pastes their own.
+The key is kept in your browser's local storage and is sent only to Google. It is never part of the site or this repository, so everyone who uses the hosted page pastes their own.
 
-For local development you can skip the pasting: create a file called `.env.local` in the project folder containing
+<details>
+<summary><b>Skip the pasting during local development</b></summary>
+
+<br>
+
+Create a file called `.env.local` in the project folder:
 
 ```
 VITE_GEMINI_API_KEY=your-key-here
 ```
 
-This file is ignored by git and is only read by `npm run dev`, never by a production build.
+The file is ignored by git and is only read by `npm run dev`, never by a production build.
 
-**Cost.** The game makes two Gemini calls per in-game day, one for the night and one for the day, so a whole game is usually 4 to 10 calls. The default model is `gemini-flash-lite-latest`; you can pick another from the setup screen. There is a cap on calls per game (80 by default), and if a call fails or the cap is hit, the fruits carry on using the No AI rules.
+</details>
 
-**A caveat.** To keep the call count low, one call plays every fruit at once and is told to keep each fruit's knowledge separate. That usually holds, but a model can occasionally let a fruit act on something it should not know.
+<details>
+<summary><b>What it costs</b></summary>
 
-## Hosting on GitHub Pages
+<br>
+
+The game makes **two Gemini calls per in-game day**, one for the night and one for the day, so a whole game is usually 4 to 10 calls.
+
+The default model is `gemini-flash-lite-latest`, and you can pick another on the setup screen. There is a cap on calls per game, 80 by default. If a call fails or the cap is hit, the fruits carry on using the No AI rules.
+
+</details>
+
+<details>
+<summary><b>How the prompts work, and one caveat</b></summary>
+
+<br>
+
+Each call sends a fixed cast list, written once at the start of the game, followed by the current state of the world: who is alive, the public log, and a private section for each fruit holding what it knows, what it is thinking, how far it trusts each other fruit, and the conversations it was part of.
+
+- The **night call** returns the wolf's victim, the doctor's and seer's choices, the hunter's standing target, and every fruit's updated thought and trust scores.
+- The **day call** returns every conversation in every round, then every vote.
+
+Anything missing or illegal in a reply is filled in by the No AI rules.
+
+The caveat: to keep the call count low, one call plays every fruit at once and is told to keep each fruit's knowledge separate. That usually holds, but a model can occasionally let a fruit act on something it should not know.
+
+</details>
+
+## 🌍 Hosting on GitHub Pages
 
 The repository includes a workflow, `.github/workflows/deploy.yml`, that builds and publishes the site whenever `main` is pushed.
 
-One-time setup: in the repository on GitHub, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+One-time setup: on GitHub, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
 
-The site is built to live at `/OneBadApple/`. If you rename the repository, change `base` in `vite.config.ts` to match.
+The site is built to live at `/OneBadApple/`. If you fork and rename it, change `base` in `vite.config.ts` to match.
 
-## How the code is laid out
+## 🗂️ Project layout
 
-| Path | What is in it |
-|---|---|
-| `src/sim/engine.ts` | The game loop: deals roles, runs each night and day, checks for a winner |
-| `src/sim/geminiBrain.ts` | Builds the prompts, calls Gemini, and repairs anything illegal in the reply |
-| `src/sim/mockBrain.ts` | The No AI brain: personality-driven decisions |
-| `src/sim/dialog.ts` | Stock lines for the No AI brain |
-| `src/sim/store.ts` | Shared game state and saved settings |
-| `src/sim/types.ts` | The shapes everything else agrees on, including the `Brain` interface |
-| `src/components/Fruit.tsx` | One fruit: wobble physics, stepping legs, floppy arms, face, speech and thought bubbles, slicing |
-| `src/components/Stage.tsx` | The white stage, grid floor and lights |
-| `src/components/SetupPanel.tsx` | The setup screen |
-| `src/components/Hud.tsx` | The in-game overlay: phase sign, controls, villager list, gossip log |
+```
+src/
+├── sim/                    the game, with no 3D in it
+│   ├── engine.ts           game loop: deals roles, runs each night and day, checks for a winner
+│   ├── geminiBrain.ts      builds prompts, calls Gemini, repairs anything illegal in the reply
+│   ├── mockBrain.ts        the No AI brain: personality-driven decisions
+│   ├── dialog.ts           stock lines for the No AI brain
+│   ├── quirks.ts           the ready-made personality quirks
+│   ├── store.ts            shared game state and saved settings
+│   └── types.ts            shared shapes, including the Brain interface
+└── components/             what you see
+    ├── Fruit.tsx           one fruit: wobble physics, legs, arms, face, bubbles
+    ├── Ghost.tsx           the ghost of a dead fruit
+    ├── BubbleLayout.tsx    keeps speech bubbles from covering each other
+    ├── fruitShapes.tsx     the fruit shapes, and how each one slices
+    ├── Stage.tsx           the white stage, grid floor and lights
+    ├── SetupPanel.tsx      the setup screen
+    ├── Hud.tsx             in-game overlay: phase sign, controls, villagers, gossip log
+    └── Recap.tsx           the end-of-game recap
+```
 
-The engine only enforces the rules. All choices come from a `Brain`, which has two methods: `playNight` and `playDay`. Adding another AI provider means writing one more class with those two methods.
+The engine only enforces the rules. Every choice comes from a `Brain`, which has two methods:
 
-## Built with
+```ts
+interface Brain {
+  playNight(world: WorldView): Promise<NightScript>
+  playDay(world: WorldView): Promise<DayScript>
+}
+```
 
-React, TypeScript and Vite, with three.js through react-three-fiber and drei for the 3D, Rapier for physics, and Zustand for state.
+Adding another AI provider means writing one more class with those two methods.
+
+## 🛠️ Built with
+
+- [React](https://react.dev), [TypeScript](https://www.typescriptlang.org) and [Vite](https://vite.dev)
+- [three.js](https://threejs.org) through [react-three-fiber](https://r3f.docs.pmnd.rs) and [drei](https://drei.docs.pmnd.rs)
+- [Rapier](https://rapier.rs) for physics
+- [Zustand](https://zustand.docs.pmnd.rs) for state
+- [Gemini API](https://ai.google.dev) for the optional AI brain
+
+## 🤝 Contributing
+
+Ideas, bug reports and pull requests are welcome. Good places to start:
+
+- **New lines.** Add to the pools in `src/sim/dialog.ts`.
+- **New fruits.** Add a silhouette to `SHAPES` in `src/components/fruitShapes.tsx` and a colour to `fruitLooks.ts`.
+- **New roles.** Add the role to `types.ts`, deal it in `engine.ts`, and describe it in `geminiBrain.ts`.
+- **Another AI provider.** Implement the `Brain` interface.
+
+Run `npm run build` before opening a pull request; it type-checks the whole project.
+
+<div align="center">
+<br>
+
+Made with too much fruit. 🍊🍋🍐🍒
+
+</div>

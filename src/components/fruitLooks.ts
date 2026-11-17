@@ -12,6 +12,9 @@ export const LOOKS: Record<FruitKind, { color: string; flesh: string }> = {
   blueberry: { color: '#3d58b8', flesh: '#b9a3d9' },
   cherry: { color: '#a8102a', flesh: '#e0566f' },
   kiwi: { color: '#8a6a3b', flesh: '#9bd45a' },
+  banana: { color: '#ffcb2e', flesh: '#fff4cf' },
+  strawberry: { color: '#e8273f', flesh: '#ffc4c9' },
+  watermelon: { color: '#3f9d4a', flesh: '#ff5c6c' },
 }
 
 export const ROLE_TAG: Record<Role, string> = {

@@ -1,4 +1,5 @@
 import * as D from './dialog'
+import { presetOf } from './quirks'
 import type { Brain, Conversation, DayScript, FruitState, NightScript, WorldView } from './types'
 
 type Other = { id: string; name: string }
@@ -20,6 +21,9 @@ interface Said {
   /** Who the line was about, if anyone. */
   about?: string
 }
+
+/** Something the dead might have an opinion on. */
+export type GhostEvent = 'death' | 'saved' | 'ballot-wrong' | 'ballot-right' | 'out-wrong' | 'out-right' | 'tie' | 'whisper'
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
@@ -191,7 +195,7 @@ export class MockBrain implements Brain {
           : harsh
             ? D.VOTE_HARSH
             : D.VOTE_MILD
-    return { target: target.id, reason: this.line(pool) }
+    return { target: target.id, reason: this.withTic(view.self, this.line(pool)) }
   }
 
   private nightAction(view: AgentView, candidates: Other[]): string {
@@ -255,17 +259,51 @@ export class MockBrain implements Brain {
     const options = (list: FruitState[]) => list.map((f) => ({ id: f.id, name: f.name }))
     const view = (f: FruitState) => this.view(world, f)
 
-    const wolf = living.find((f) => f.role === 'werewolf')!
+    // Every wolf has its own idea of who should go. The most aggressive one gets its way.
+    const wolves = living.filter((f) => f.role === 'werewolf')
+    const prey = options(living.filter((f) => f.role !== 'werewolf'))
+    const picks = wolves.map((w) => this.nightAction(view(w), prey))
+    const lead = wolves.indexOf(best(wolves, (w) => w.traits.aggression))
     const doctor = living.find((f) => f.role === 'doctor')
     const seer = living.find((f) => f.role === 'seer')
     const hunter = living.find((f) => f.role === 'hunter')
     return {
-      kill: this.nightAction(view(wolf), options(living.filter((f) => f.role !== 'werewolf'))),
+      kill: picks[lead],
+      wolfChat: wolves.length > 1 ? this.wolfChat(wolves, picks, lead, prey) : undefined,
       protect: doctor ? this.nightAction(view(doctor), options(living)) : null,
       inspect: seer ? this.nightAction(view(seer), options(living.filter((f) => f.id !== seer.id))) : null,
       revenge: hunter ? this.topSuspect(view(hunter)).id : null,
       minds: living.map((f) => this.mind(view(f))),
     }
+  }
+
+  /** The pack's whispered argument over the victim. It always ends on the lead wolf's choice. */
+  private wolfChat(wolves: FruitState[], picks: string[], lead: number, prey: Other[]): NightScript['wolfChat'] {
+    const named = (id: string) => prey.find((p) => p.id === id)
+    const other = lead === 0 ? 1 : 0
+    const target = named(picks[lead])
+    const lines = [{ id: wolves[other].id, say: this.line(D.WOLF_PROPOSE, named(picks[other])) }]
+    if (picks[other] === picks[lead]) {
+      lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_AGREE, target) })
+    } else {
+      lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_COUNTER, target) })
+      lines.push({ id: wolves[other].id, say: this.line(D.WOLF_GIVE_IN, target) })
+    }
+    lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_SETTLE, target) })
+    return lines
+  }
+
+  /** Now and then a fruit's quirk shows: a little phrase of its own on the end of the line. */
+  private withTic(fruit: FruitState, say: string): string {
+    const tics = fruit.traits.quirks.flatMap((q) => presetOf(q)?.tics ?? [])
+    return tics.length && Math.random() < 0.4 ? `${say} ${pick(tics)}` : say
+  }
+
+  /** What a fruit cries out if it is the one voted out. */
+  private lastCry(fruit: FruitState): string {
+    if (fruit.role === 'werewolf') return this.line(D.LAST_WOLF)
+    if (fruit.role === 'jester') return this.line(D.LAST_JESTER)
+    return this.line(Math.random() < fruit.traits.aggression ? D.LAST_CURSE : D.LAST_PLEA)
   }
 
   /** Split the living into pairs (one trio if the count is odd), each fruit seeking out who it wants to talk to. */
@@ -305,9 +343,10 @@ export class MockBrain implements Brain {
       const previous = members[(t + members.length - 1) % members.length]
       const next = members[(t + 1) % members.length]
       const view = this.view(world, speaker, [...(extra.get(speaker.id) ?? []), ...said])
-      const [say, meta] = t === 0 ? this.opener(view, next) : this.reply(view, previous, last)
+      const [plain, meta] = t === 0 ? this.opener(view, next) : this.reply(view, previous, last)
+      const say = this.withTic(speaker, plain)
       last = meta
-      lines.push({ id: speaker.id, say })
+      lines.push({ id: speaker.id, say, accuses: meta.tone === 'accuse' ? meta.about : undefined })
       said.push(`${speaker.name}: ${say}`)
     }
     for (const m of members) extra.set(m.id, [...(extra.get(m.id) ?? []), ...said])
@@ -330,11 +369,31 @@ export class MockBrain implements Brain {
     const cast: string[] = []
     for (const f of living) {
       const choice = this.vote(this.view(world, f, [...(extra.get(f.id) ?? []), ...cast]))
-      votes.push({ id: f.id, ...choice })
+      votes.push({ id: f.id, ...choice, lastWords: this.lastCry(f) })
       // Votes are public, so later voters can follow the crowd.
       cast.push(`${f.name}: I vote ${nameOf(choice.target)}.`)
     }
     return { rounds, votes }
+  }
+
+  /** What a ghost thinks of something that just happened. A dead werewolf still roots for the pack. */
+  ghostThought(ghost: FruitState, event: GhostEvent, about?: Other): string {
+    if (ghost.role === 'werewolf') {
+      if (event === 'tie') return this.line(D.GHOST_TIE)
+      const bad = event === 'saved' || event === 'ballot-right' || event === 'out-right'
+      return this.line(bad ? D.GHOST_WOLF_SORE : D.GHOST_WOLF_GLAD, about)
+    }
+    const pools: Record<GhostEvent, string[]> = {
+      death: D.GHOST_DEATH,
+      saved: D.GHOST_SAVED,
+      'ballot-wrong': D.GHOST_BALLOT_WRONG,
+      'ballot-right': D.GHOST_BALLOT_RIGHT,
+      'out-wrong': D.GHOST_OUT_WRONG,
+      'out-right': D.GHOST_OUT_RIGHT,
+      tie: D.GHOST_TIE,
+      whisper: D.GHOST_WHISPER,
+    }
+    return this.line(pools[event], about)
   }
 
   /** The hunter's last words. */

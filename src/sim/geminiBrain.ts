@@ -1,4 +1,5 @@
 import { MockBrain } from './mockBrain'
+import { quirkText } from './quirks'
 import type { Brain, Conversation, DayScript, FruitState, NightScript, Role, WorldView } from './types'
 
 const API = 'https://generativelanguage.googleapis.com/v1beta'
@@ -46,7 +47,7 @@ export function buildPersona(fruit: Pick<FruitState, 'name' | 'kind' | 'role' | 
     `${fruit.name} is a little ${fruit.kind} with legs.`,
     `Role: ${ROLE_BRIEF[fruit.role]}`,
     `Personality: aggression ${level(t.aggression)}, honesty ${level(t.honesty)}, talkativeness ${level(t.talkativeness)}, suspicion of others ${level(t.suspicion)}.`,
-    t.quirk ? `Quirk: ${t.quirk}` : '',
+    t.quirks.length ? `Quirks: ${t.quirks.map(quirkText).join(' ')}` : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -103,12 +104,13 @@ const NIGHT_SCHEMA = obj({
   protect: STR,
   inspect: STR,
   revenge: STR,
+  wolfChat: list(obj({ name: STR, say: STR })),
   minds: list(obj({ name: STR, thought: STR, feelings: list(obj({ about: STR, trust: { type: 'INTEGER' }, note: STR })) })),
 })
 
 const DAY_SCHEMA = obj({
   rounds: list(obj({ groups: list(obj({ members: list(STR), lines: list(obj({ name: STR, say: STR })) })) })),
-  votes: list(obj({ name: STR, target: STR, reason: STR })),
+  votes: list(obj({ name: STR, target: STR, reason: STR, lastWords: STR })),
 })
 
 type Json = Record<string, unknown>
@@ -218,6 +220,7 @@ export class GeminiBrain implements Brain {
     const seer = living.find((f) => f.role === 'seer')
     const hunter = living.find((f) => f.role === 'hunter')
     const prey = living.filter((f) => f.role !== 'werewolf')
+    const wolves = living.filter((f) => f.role === 'werewolf')
 
     const out = await this.ask(
       world,
@@ -227,6 +230,9 @@ export class GeminiBrain implements Brain {
         doctor ? `- "protect": who ${doctor.name} (doctor) guards; may be itself.` : '- "protect": "" (there is no doctor).',
         seer ? `- "inspect": who ${seer.name} (seer) inspects; not itself, ideally someone not inspected before.` : '- "inspect": "" (there is no seer).',
         hunter ? `- "revenge": who ${hunter.name} (hunter) will take down with it if it dies before the next night; not itself.` : '- "revenge": "" (there is no hunter).',
+        wolves.length > 1
+          ? `- "wolfChat": before they strike, the werewolves (${wolves.map((f) => f.name).join(', ')}) whisper together about who to kill: 3 or 4 short lines, each in its speaker's own voice, in which they may disagree, ending with them settled on the fruit named in "kill". Nobody else hears this.`
+          : '- "wolfChat": [] (there is only one werewolf).',
         '- "minds": for EVERY living fruit, its updated inner state after everything so far: "thought" is one private sentence (max 20 words) in its own voice about what it plans or fears; "feelings" has one entry for EVERY other living fruit with "trust" from -5 (certain they are a werewolf) to +5 (total trust) and a "note" of at most 8 words giving the reason. Base feelings on what that fruit has actually seen and heard, coloured by its personality.',
       ].join('\n'),
       NIGHT_SCHEMA,
@@ -245,8 +251,17 @@ export class GeminiBrain implements Brain {
       return [{ id, thought: this.text(row.thought, 200), feelings }]
     })
 
+    const kill = this.resolve(out.kill, prey)
+    const chat = this.rows(out.wolfChat).flatMap((row) => {
+      const id = this.resolve(row.name, wolves)
+      const say = this.text(row.say)
+      return id && say ? [{ id, say }] : []
+    })
+
     return {
-      kill: this.resolve(out.kill, prey) ?? backup.kill,
+      kill: kill ?? backup.kill,
+      // The rule-based whispers name the rule-based victim, so they only fit if that victim is used.
+      wolfChat: wolves.length > 1 ? (kill && chat.length >= 2 ? chat.slice(0, 5) : kill ? undefined : backup.wolfChat) : undefined,
       protect: doctor ? (this.resolve(out.protect, living) ?? backup.protect) : null,
       inspect: seer ? (this.resolve(out.inspect, living.filter((f) => f.id !== seer.id)) ?? backup.inspect) : null,
       revenge: hunter ? (this.resolve(out.revenge, living.filter((f) => f.id !== hunter.id)) ?? backup.revenge) : null,
@@ -294,7 +309,7 @@ export class GeminiBrain implements Brain {
       [
         `It is day ${world.day}. Write the whole day in order:`,
         `- "rounds": exactly ${rounds} round${rounds > 1 ? 's' : ''} of talking. In each round the living fruits split into "groups" of two (one group of three if the number is odd), so that EVERY living fruit is in exactly one group. Each fruit goes to whoever it most wants to talk to, given its feelings and personality (to confront a suspect, sound out a friend, spread a rumour, tell a lie), and should change partner between rounds. Each group has "members" and its own private conversation in "lines": about 4 lines for a pair, 5 for a three, speakers taking turns and reacting to each other. Only a group's members hear its lines. What a fruit learns in one round it can repeat, twist or hide in the next.`,
-        '- "votes": after the talking, EVERY living fruit votes in public for ONE other living fruit ("target"), with a short "reason" said out loud. Each vote must follow from that fruit\'s own feelings and only the conversations it was in.',
+        '- "votes": after the talking, EVERY living fruit votes in public for ONE other living fruit ("target"), with a short "reason" said out loud. Each vote must follow from that fruit\'s own feelings and only the conversations it was in. "lastWords" is what that fruit cries out, in at most 15 words, if it turns out to be the one voted out: an innocent fruit pleads or curses the village, a werewolf that has been caught may gloat or confess, the jester celebrates.',
       ].join('\n'),
       DAY_SCHEMA,
     )
@@ -304,7 +319,8 @@ export class GeminiBrain implements Brain {
     const votes = this.rows(out.votes).flatMap((row) => {
       const id = this.resolve(row.name, living)
       const target = this.resolve(row.target, living)
-      return id && target && target !== id ? [{ id, target, reason: this.text(row.reason, 160) }] : []
+      const lastWords = this.text(row.lastWords, 140) || backup.votes.find((v) => v.id === id)?.lastWords
+      return id && target && target !== id ? [{ id, target, reason: this.text(row.reason, 160), lastWords }] : []
     })
 
     return {

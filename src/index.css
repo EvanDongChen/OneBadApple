@@ -33,6 +33,8 @@ body,
 
 h1,
 h2,
+h3,
+h4,
 p {
   margin: 0;
 }
@@ -273,6 +275,25 @@ label {
   gap: 16px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand img {
+  width: 76px;
+  height: 76px;
+  flex: none;
+  transform: rotate(-6deg);
+  filter: drop-shadow(0 4px 0 var(--ink));
+}
+
+.brand h1 {
+  font-size: 40px;
+  line-height: 0.92;
+}
+
 .tagline {
   font-weight: 800;
   margin-top: -6px;
@@ -301,6 +322,103 @@ label {
   background: #fff;
   border: 2.5px solid var(--ink);
   border-radius: 12px;
+}
+
+/* ---------- Quirks: chips you drag onto villagers ---------- */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--paper-dark);
+  border: 2.5px dashed var(--ink);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--display);
+  font-size: 13px;
+  line-height: 1;
+  padding: 5px 9px 4px;
+  background: var(--tint, #fff);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 var(--ink);
+  cursor: grab;
+  user-select: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:active {
+  cursor: grabbing;
+}
+
+.chip.custom {
+  border-style: dashed;
+}
+
+/* The quirk you have picked up by tapping it. */
+.chip.held {
+  outline: 3px solid var(--apple);
+  outline-offset: 1px;
+  transform: translateY(-2px) rotate(-3deg);
+}
+
+.chip:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 1px;
+}
+
+button.chip-x {
+  font-family: var(--body);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 0 1px;
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  background: rgb(0 0 0 / 14%);
+}
+
+button.chip-x:active:not(:disabled) {
+  transform: none;
+}
+
+.card-quirks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px 8px;
+}
+
+/* A villager you can drop the quirk on. */
+.card.over,
+.card.target:hover {
+  outline: 3px solid var(--sun);
+  outline-offset: 1px;
+  background: #fffbea;
+}
+
+.card.target .card-head {
+  cursor: copy;
 }
 
 .card-head {
@@ -646,6 +764,12 @@ button.roster-row.on {
   opacity: 0.6;
 }
 
+/* A ghost's thought: nobody alive heard it. */
+.log .ghost {
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .log .vote {
   padding-left: 8px;
   border-left: 4px solid var(--apple);
@@ -653,20 +777,21 @@ button.roster-row.on {
 
 /* ---------- End card ---------- */
 
+/* Sits under the sign, clear of the dance floor in the middle of the screen. */
 .banner {
-  top: 50%;
+  top: 122px;
   left: 50%;
-  transform: translate(-50%, -50%) rotate(-1.5deg);
+  transform: translateX(-50%) rotate(-1.5deg);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  padding: 26px 34px 24px;
+  gap: 9px;
+  padding: 16px 26px 16px;
   text-align: center;
 }
 
 .banner h1 {
-  font-size: 46px;
+  font-size: 34px;
   transform: none;
 }
 
@@ -677,6 +802,157 @@ button.roster-row.on {
 .banner .row {
   justify-content: center;
   align-items: center;
+}
+
+/* ---------- Recap of the finished game ---------- */
+
+.recap {
+  top: 122px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 30;
+}
+
+.recap section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 3px dashed var(--ink);
+  padding-top: 10px;
+}
+
+.recap h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 17px;
+  margin-top: 4px;
+}
+
+.recap h3 .sky-icon {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.recap h3 .sky-icon.moon {
+  box-shadow: inset -5px -1px 0 #8fa0d8;
+}
+
+.recap h4 {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+.recap .role {
+  display: inline-block;
+  margin: 0 3px 0 4px;
+  vertical-align: 1px;
+}
+
+.recap .deed {
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 6px 9px;
+  line-height: 1.5;
+}
+
+.recap .deed.kill,
+.recap .deed.shot {
+  border-left: 7px solid var(--apple);
+}
+
+.recap .deed.saved {
+  border-left: 7px solid var(--leaf);
+}
+
+.recap .deed.inspect {
+  border-left: 7px solid var(--plum);
+}
+
+.recap .deed.vote {
+  border-left: 7px solid var(--sun);
+}
+
+.recap .turns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 2px 0;
+}
+
+.recap .turn {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.recap .arrow {
+  font-size: 10px;
+  line-height: 18px;
+  flex: none;
+}
+
+.recap .arrow.bad {
+  color: var(--apple);
+}
+
+.recap .arrow.good {
+  color: var(--leaf);
+}
+
+.recap .verdict {
+  font-family: var(--display);
+  font-size: 10px;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ink);
+}
+
+.recap .verdict.right {
+  background: #cfeac4;
+}
+
+.recap .verdict.wrong {
+  background: #ffd9d2;
+}
+
+.recap .note {
+  opacity: 0.7;
+}
+
+.recap .ballots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.recap .ballot {
+  display: grid;
+  grid-template-columns: 150px 70px 1fr;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.recap .crosses {
+  font-family: var(--display);
+  color: var(--apple);
+  letter-spacing: 1px;
 }
 
 /* ---------- Labels floating over fruits ---------- */
@@ -706,9 +982,68 @@ button.roster-row.on {
   padding: 3px 8px 2px;
 }
 
-.fruit-tag.dead .name {
-  opacity: 0.65;
-  text-decoration: line-through;
+/* A ghost's tag: pale and dashed. */
+.fruit-tag.ghost .name {
+  background: #f4f0ff;
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+/* Comic marks that pop up over a fruit to show how it feels. */
+.emote {
+  font-family: var(--display);
+  font-size: 34px;
+  line-height: 0.9;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink);
+  animation: pop 0.25s ease-out;
+}
+
+.emote.gasp {
+  color: var(--apple);
+}
+
+.emote.cheer {
+  color: #ff6fa3;
+}
+
+.emote .dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.emote .dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #8d9bb0;
+  border: 2.5px solid var(--ink);
+}
+
+.emote.puzzle {
+  color: var(--plum);
+}
+
+.emote .drop {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 4px 0 6px;
+  background: #58b6f0;
+  border: 2.5px solid var(--ink);
+  border-radius: 0 60% 60% 60%;
+  transform: rotate(45deg);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.2) translateY(12px);
+  }
+  70% {
+    transform: scale(1.25);
+  }
 }
 
 /* Comic speech bubble with a tail. */
@@ -806,6 +1141,7 @@ button.roster-row.on {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .emote,
   .fruit-tag .bubble.thinking i {
     animation: none;
   }
