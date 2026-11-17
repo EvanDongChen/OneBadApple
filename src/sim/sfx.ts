@@ -30,32 +30,31 @@ function tone(freq: number, start: number, duration: number, type: OscillatorTyp
   osc.stop(t + duration + 0.02)
 }
 
-/** Voice pitch for each kind of fruit: small fruits squeak, big ones rumble. */
-const KIND_PITCH: Record<FruitKind, number> = {
-  apple: 290,
-  orange: 235,
-  lemon: 350,
-  plum: 310,
-  pear: 195,
-  lime: 375,
-  peach: 330,
-  blueberry: 420,
-  cherry: 460,
-  kiwi: 260,
-  banana: 245,
-  strawberry: 440,
-  watermelon: 165,
+/** How high each kind of fruit speaks, in steps up the scale below: big fruits low, small ones high. */
+const KIND_STEP: Record<FruitKind, number> = {
+  watermelon: 0,
+  pear: 1,
+  orange: 2,
+  banana: 3,
+  kiwi: 3,
+  apple: 4,
+  plum: 5,
+  peach: 6,
+  lemon: 7,
+  lime: 8,
+  strawberry: 9,
+  blueberry: 10,
+  cherry: 11,
 }
 
-/** Mouth shapes: the two resonances that make a buzz sound like "ah", "eh", "ee", "oh" or "oo". */
-const VOWELS: Record<string, [number, number]> = {
-  a: [850, 1300],
-  e: [550, 1900],
-  i: [330, 2400],
-  o: [520, 950],
-  u: [360, 800],
+/** Every voice uses the same five-note scale, so fruits talking over each other stay in tune. */
+const SCALE = [0, 2, 4, 7, 9]
+
+/** The pitch, in hertz, of a step on that scale. */
+function note(step: number) {
+  const degree = ((step % SCALE.length) + SCALE.length) % SCALE.length
+  return 196 * 2 ** ((12 * Math.floor(step / SCALE.length) + SCALE[degree]) / 12)
 }
-const VOWEL_KEYS = Object.keys(VOWELS)
 
 /** Where the viewer is listening from: the camera, kept up to date by the stage. */
 export const ears = { position: new Vector3(0, 12, 21), right: new Vector3(1, 0, 0) }
@@ -98,37 +97,30 @@ function mix(fresh?: Voice) {
   })
 }
 
-/** One spoken syllable: a buzz shaped by a vowel's two resonances, with a quick fade in and out. */
-function syllable(out: AudioNode, pitch: number, start: number, length: number, vowel: [number, number], gain: number) {
+/** One soft blip of speech: a rounded tone that starts a touch sharp, settles, and dies away. */
+function blip(out: AudioNode, pitch: number, start: number, length: number, gain: number) {
   if (!ctx) return
   const t = ctx.currentTime + start
   const osc = ctx.createOscillator()
   const amp = ctx.createGain()
-  osc.type = 'sawtooth'
-  osc.frequency.setValueAtTime(pitch * 1.05, t)
-  osc.frequency.exponentialRampToValueAtTime(pitch * 0.95, t + length)
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(pitch * 1.04, t)
+  osc.frequency.exponentialRampToValueAtTime(pitch, t + 0.03)
   amp.gain.setValueAtTime(0.0001, t)
-  amp.gain.linearRampToValueAtTime(gain, t + 0.008)
-  amp.gain.setValueAtTime(gain, t + length * 0.55)
+  amp.gain.linearRampToValueAtTime(gain, t + 0.006)
   amp.gain.exponentialRampToValueAtTime(0.0001, t + length)
-  for (const frequency of vowel) {
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'bandpass'
-    filter.frequency.value = frequency
-    filter.Q.value = 5
-    osc.connect(filter).connect(amp)
-  }
-  amp.connect(out)
+  osc.connect(amp).connect(out)
   osc.start(t)
   osc.stop(t + length + 0.02)
 }
 
 /**
- * Speech as a rapid string of tiny syllables, one per letter of the line, so the gibberish
- * follows the rhythm of the words: vowels sound like themselves, consonants are shorter and
- * quieter, spaces and punctuation are pauses, and a question rises at the end.
- * The kind of fruit sets the pitch, talkative fruits gabble faster, and aggressive ones swing
- * further up and down. `variant` nudges the pitch so two fruits of the same kind differ.
+ * Speech as a string of soft musical blips that follows the rhythm of the line: one blip
+ * for each vowel and for the start of each word, with pauses at spaces and punctuation, and
+ * a rise at the end of a question. Each letter always lands on the same note for a given
+ * fruit. The kind of fruit sets how high it speaks, talkative fruits gabble faster, and
+ * aggressive ones jump further between notes. `variant` detunes the voice very slightly
+ * so two fruits of the same kind still differ.
  */
 export function babble(fruit: Pick<FruitDef, 'id' | 'kind' | 'traits'>, variant: number, text: string, durationMs: number) {
   if (!ctx || useSim.getState().settings.muted) return
@@ -146,25 +138,49 @@ export function babble(fruit: Pick<FruitDef, 'id' | 'kind' | 'traits'>, variant:
       window.clearInterval(mixTimer)
       mixTimer = undefined
     }
-  }, durationMs + 150)
+  }, durationMs + 300)
 
-  const base = KIND_PITCH[fruit.kind] * (1 + (((variant * 7) % 5) - 2) * 0.04)
   const letters = text.toLowerCase().slice(0, 90)
+  const detune = 2 ** ((((variant % 3) - 1) * 0.1) / 12)
+  const leap = 0.6 + fruit.traits.aggression
   // Finish a little before the bubble closes, however fast the game is running.
-  const gap = Math.min(0.078 - fruit.traits.talkativeness * 0.026, ((durationMs / 1000) * 0.85) / Math.max(1, letters.length))
-  const swing = 0.035 + fruit.traits.aggression * 0.05
+  const gap = Math.min(0.072 - fruit.traits.talkativeness * 0.022, ((durationMs / 1000) * 0.8) / Math.max(1, letters.length))
   const question = text.trim().endsWith('?')
+  let wordStart = true
   for (let i = 0; i < letters.length; i++) {
     const letter = letters[i]
-    if (letter < 'a' || letter > 'z') continue
-    const code = letter.charCodeAt(0)
-    const isVowel = letter in VOWELS
-    const vowel = VOWELS[isVowel ? letter : VOWEL_KEYS[code % VOWEL_KEYS.length]]
-    // Each letter always lands on the same note, which is what makes it sound like words.
-    const lift = question && i > letters.length - 8 ? 1 + (i - letters.length + 8) * 0.03 : 1
-    const pitch = base * (1 + ((code % 7) - 3) * swing) * lift
-    syllable(voice.out, pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, isVowel ? 0.3 : 0.2)
+    if (letter < 'a' || letter > 'z') {
+      wordStart = true
+      continue
+    }
+    const isVowel = 'aeiou'.includes(letter)
+    if (isVowel || wordStart) {
+      const offset = Math.round((((letter.charCodeAt(0) * 3) % 5) - 2) * leap)
+      const lift = question && i > letters.length - 7 ? 2 : 0
+      blip(voice.out, note(KIND_STEP[fruit.kind] + offset + lift) * detune, i * gap, gap * 2.4, isVowel ? 0.2 : 0.13)
+    }
+    wordStart = false
   }
+}
+
+/** A gunshot: a crack of noise that dies away fast, over a low thump. */
+export function gunshot() {
+  if (!ctx || useSim.getState().settings.muted) return
+  const length = 0.35
+  const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp((-i / data.length) * 9)
+  const noise = ctx.createBufferSource()
+  const filter = ctx.createBiquadFilter()
+  const amp = ctx.createGain()
+  noise.buffer = buffer
+  filter.type = 'lowpass'
+  filter.frequency.setValueAtTime(6000, ctx.currentTime)
+  filter.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + length)
+  amp.gain.value = 0.7
+  noise.connect(filter).connect(amp).connect(ctx.destination)
+  noise.start()
+  tone(160, 0, 0.3, 'sine', 0.5, 40)
 }
 
 /** A sharp intake of breath from the whole village. */
