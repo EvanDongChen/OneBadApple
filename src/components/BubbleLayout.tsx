@@ -1,19 +1,22 @@
 import { useEffect } from 'react'
 
 const GAP = 8 // pixels kept between two bubbles
-const EASE = 0.25
+const EASE = 0.2
+const STICK = 14 // a bubble ignores changes smaller than this many pixels
+const HOLD_MS = 600 // how long a lifted bubble must be clear before it comes back down
 
 /**
  * Keeps speech and thought bubbles from covering each other. Every bubble is drawn over its
  * own fruit, so when fruits stand close together, or line up from where the camera is, their
  * bubbles land on the same patch of screen. This looks at where the bubbles actually are on
- * screen and lifts the overlapping ones up into a stack, each joined to its fruit by a line.
+ * screen and lifts the overlapping ones up into a stack.
  * Because it works on screen positions, it follows the camera as it moves.
  */
 export default function BubbleLayout() {
   useEffect(() => {
     let frame = 0
     const lifts = new WeakMap<HTMLElement, number>()
+    const settled = new WeakMap<HTMLElement, { target: number; clearSince: number }>()
 
     const tick = () => {
       frame = requestAnimationFrame(tick)
@@ -45,12 +48,27 @@ export default function BubbleLayout() {
           if (!moved) break
         }
       })
+      const now = performance.now()
       for (const box of boxes) {
-        const next = Math.abs(box.want - box.lift) < 0.5 ? box.want : box.lift + (box.want - box.lift) * EASE
+        // Fruits wobble and shake, which makes the wanted position twitch from frame to frame.
+        // So a bubble only changes where it is heading for a real difference, and only drops
+        // back down once it has been clear of the others for a moment.
+        const s = settled.get(box.el) ?? { target: 0, clearSince: 0 }
+        if (box.want > 0) {
+          s.clearSince = 0
+          // Going up, leave a little spare room so the next twitch does not ask for more.
+          if (box.want > s.target) s.target = box.want + STICK / 2
+          else if (box.want < s.target - STICK * 1.5) s.target = box.want
+        } else if (s.target > 0) {
+          s.clearSince ||= now
+          if (now - s.clearSince > HOLD_MS) s.target = 0
+        }
+        settled.set(box.el, s)
+
+        const next = Math.abs(s.target - box.lift) < 0.5 ? s.target : box.lift + (s.target - box.lift) * EASE
         if (next === box.lift) continue
         lifts.set(box.el, next)
         box.el.style.transform = next ? `translateY(${-next}px)` : ''
-        box.el.style.setProperty('--lift', `${next}px`)
       }
     }
     frame = requestAnimationFrame(tick)
