@@ -122,6 +122,7 @@ export default function Hud() {
               {entry.name && (
                 <>
                   <RichText text={entry.name} />
+                  {entry.kind === 'ghost' && <span className="verb">'s ghost</span>}
                   {entry.to && (
                     <>
                       <span className="verb"> to </span>

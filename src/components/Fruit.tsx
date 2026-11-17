@@ -98,11 +98,15 @@ export default function Fruit({ id }: { id: string }) {
   const pointAt = useSim((s) => s.votes[id])
   const votesAgainst = useSim((s) => Object.values(s.votes).filter((target) => target === id).length)
   const reaction = useSim((s) => s.reactions[id])
+  // Carrying out the vote: this fruit holds the gun, and `firing` is the moment of the shot.
+  const gunning = useSim((s) => s.execution?.shooterId === id)
+  const firing = useSim((s) => s.execution?.shooterId === id && s.execution.firing)
   const armed = useSim((s) => s.attack?.attackerId === id)
   const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
   // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
   const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
   const knife = useRef<Group>(null)
+  const gun = useRef<Group>(null)
   const { alive, kind } = fruit
   // Where the face and arms sit on this fruit's particular shape.
   const face = useMemo(() => anchors(kind), [kind])
@@ -182,6 +186,18 @@ export default function Fruit({ id }: { id: string }) {
     return () => clearTimeout(timer)
   }, [reaction, alive])
 
+  // The gun kicks the shooter back.
+  useEffect(() => {
+    const b = body.current
+    const targetId = useSim.getState().execution?.targetId
+    const target = targetId ? fruitPositions.get(targetId) : undefined
+    if (!firing || !b || !target) return
+    const t = b.translation()
+    const d = Math.hypot(target.x - t.x, target.z - t.z) || 1
+    const m = b.mass()
+    b.applyImpulse({ x: (-(target.x - t.x) / d) * m * 2.2, y: m * 1.5, z: (-(target.z - t.z) / d) * m * 2.2 }, true)
+  }, [firing])
+
   // The wolf lunges at its victim when it strikes.
   useEffect(() => {
     const b = body.current
@@ -217,8 +233,13 @@ export default function Fruit({ id }: { id: string }) {
     b.setAngularDamping(1.2)
     const m = b.mass()
     const t = b.translation()
-    const out = Math.hypot(t.x, t.z) || 1
-    b.applyImpulse({ x: (t.x / out) * m * 7, y: m * 10, z: (t.z / out) * m * 7 }, true)
+    // Shot: thrown straight back from the gun. Otherwise (the hunter's revenge) flung outward.
+    const execution = useSim.getState().execution
+    const shooter = execution?.targetId === id ? fruitPositions.get(execution.shooterId) : undefined
+    const fromX = shooter ? t.x - shooter.x : t.x
+    const fromZ = shooter ? t.z - shooter.z : t.z
+    const out = Math.hypot(fromX, fromZ) || 1
+    b.applyImpulse({ x: (fromX / out) * m * 7, y: m * 10, z: (fromZ / out) * m * 7 }, true)
     b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 3, y: (Math.random() - 0.5) * m, z: (Math.random() - 0.5) * m * 3 }, true)
   }, [alive])
 
@@ -466,6 +487,17 @@ export default function Fruit({ id }: { id: string }) {
       }
     }
 
+    // The gun sits in the right hand, which is already pointing at the condemned fruit.
+    if (gun.current) {
+      gun.current.visible = !!gunning && alive
+      const targetId = useSim.getState().execution?.targetId
+      const aim = targetId ? fruitPositions.get(targetId) : undefined
+      if (gunning && aim) {
+        gun.current.position.copy(arms.current[1][1].pos)
+        gun.current.lookAt(aim.x, gun.current.position.y, aim.z)
+      }
+    }
+
     // Legs. Alive: procedural stepping, a foot stays planted until the body drifts away
     // from it. Dead: the legs just stick out limply from the body.
     v.fwd.set(0, 0, 1).applyQuaternion(v.quat).setY(0)
@@ -565,6 +597,22 @@ export default function Fruit({ id }: { id: string }) {
         <mesh castShadow position={[0, 0.32, 0.01]}>
           <boxGeometry args={[0.02, 0.4, 0.11]} />
           <meshStandardMaterial color="#eef2f5" emissive="#aeb8c2" emissiveIntensity={0.7} roughness={0.3} />
+        </mesh>
+      </group>
+
+      {/* The gun: barrel along its own forward axis, grip below, and a flash at the muzzle for the shot. */}
+      <group ref={gun} visible={false} scale={1.6}>
+        <mesh castShadow position={[0, 0.02, 0.1]}>
+          <boxGeometry args={[0.05, 0.07, 0.3]} />
+          <meshStandardMaterial color="#2b2f36" metalness={0.4} roughness={0.4} />
+        </mesh>
+        <mesh castShadow position={[0, -0.07, -0.01]} rotation={[0.25, 0, 0]}>
+          <boxGeometry args={[0.05, 0.14, 0.07]} />
+          <meshStandardMaterial color="#5a3a1c" />
+        </mesh>
+        <mesh visible={!!firing} position={[0, 0.02, 0.36]}>
+          <sphereGeometry args={[0.1, 10, 8]} />
+          <meshBasicMaterial color="#ffd23f" />
         </mesh>
       </group>
 

@@ -457,3 +457,53 @@ export const WOLF_SETTLE = [
   'Go on, then. Make it clean.',
   'Back before dawn, and not a word.',
 ]
+
+// ---------- What the dead think. Ghosts know who everyone really was. {x} is whoever it is about. ----------
+
+/** A fruit has just been killed in the night. */
+export const GHOST_DEATH = [
+  'Oh, {x}. Not you too.',
+  'Welcome to the other side, {x}. It is quiet here.',
+  'I tried to warn them. Nobody listens to a ghost.',
+  'Budge up, everyone. {x} is joining us.',
+  'Poor {x}. Sliced so thin.',
+  'I saw the whole thing. I always see the whole thing.',
+]
+
+export const GHOST_SAVED = ['The doctor earned its keep tonight.', 'Close one. Nobody new up here today.', 'Good. It is crowded enough already.']
+
+/** A vote has just been cast against an innocent fruit. */
+export const GHOST_BALLOT_WRONG = [
+  'No. Not {x}. {x} is innocent!',
+  'Wrong fruit. Wrong fruit!',
+  'I cannot watch this.',
+  'They are doing it again.',
+  '{x} never hurt a soul, you pips.',
+  'If I had hands I would be wringing them.',
+]
+
+/** A vote has just been cast against a werewolf. */
+export const GHOST_BALLOT_RIGHT = ['Yes. {x}. Keep going.', 'Finally, someone with eyes.', 'That is the one. THAT one.', 'Warmer. Much warmer.', 'Oh, please let the others follow.']
+
+/** An innocent fruit has been voted out. */
+export const GHOST_OUT_WRONG = [
+  'And there goes {x}. Innocent as a pip.',
+  'Well done. Another one for my side of the fence.',
+  'I would scream, but nobody would hear it.',
+  'Sorry, {x}. They never learn.',
+  'The wolf must be laughing itself sick.',
+]
+
+/** A werewolf has been voted out. */
+export const GHOST_OUT_RIGHT = ['Got one. About time.', 'That one was for me, {x}.', 'Ha. Enjoy being dead, {x}.', 'Justice. Late, but justice.', 'I knew it. I KNEW it.']
+
+export const GHOST_TIE = ['A tie. Brilliant. Just brilliant.', 'They cannot even agree on who to get wrong.', 'Another day wasted.']
+
+/** The werewolves are whispering and only the dead can hear them. */
+export const GHOST_WHISPER = ['They are RIGHT THERE. Look!', 'I can hear every word. Much good it does me.', 'Somebody wake up. Anybody.', 'Oh, so THAT is who it was.']
+
+/** A dead werewolf, when things go well for the pack. */
+export const GHOST_WOLF_GLAD = ['Lovely. Keep it up.', 'Still winning, even dead.', 'The pack sends its regards.', 'Oh, this is going beautifully.', 'They make it so easy.']
+
+/** A dead werewolf, when the village is closing in on {x}. */
+export const GHOST_WOLF_SORE = ['No, no, no. Leave {x} alone.', 'Tch. Sloppy.', 'They got lucky.', 'Do not look at {x}. Look anywhere else.']

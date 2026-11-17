@@ -82,7 +82,8 @@ export interface FruitState extends FruitDef {
 }
 
 export interface LogEntry {
-  kind: 'say' | 'system' | 'vote'
+  /** `ghost` is a dead fruit's thought, which no living fruit can hear. */
+  kind: 'say' | 'system' | 'vote' | 'ghost'
   name?: string
   /** Who a conversation line was said to. */
   to?: string

@@ -33,10 +33,11 @@ Nobody plays. You just watch it go wrong.
 | 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
 | 🔪 **Fruit physics** | Wobbly walking, floppy arms, stepping legs, and victims that fall apart into slices shaped like the fruit they were. |
 | 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong, each with a comic mark over its head. |
-| 👻 **Ghosts** | Dead fruits rise as see-through ghosts and drift around the edge of the stage. They know who everyone really was, and cheer or despair as the living vote. |
+| 👻 **Ghosts** | Dead fruits rise as see-through ghosts and drift around the edge of the stage. They know who everyone really was, cheer or despair as the living vote, and think out loud about it where only you can read it. |
 | 🐺 **Wolf whispers** | With two or more werewolves, the pack slips out at night to argue over the victim, and you can read every word. |
-| 💬 **Last words** | A fruit that is voted out gets one final line: a plea, a curse, or a caught wolf's smug confession. |
-| 🗣️ **Voices** | Every fruit babbles in its own voice, one syllable per letter of its line: the kind of fruit sets the pitch, and chatty fruits gabble faster. When several conversations run at once you hear the one nearest the camera. |
+| 💬 **Last words** | A fruit that is voted out gets one final line: a plea, a curse, or a caught wolf's smug confession. Then the most aggressive fruit that voted for it carries out the sentence with a gun. |
+| 🗯️ **Readable bubbles** | Speech bubbles that would cover each other on screen are stacked clear of one another, whatever angle you watch from. |
+| 🗣️ **Voices** | Every fruit babbles in soft musical blips that follow the rhythm of its line: the kind of fruit sets the pitch, and chatty fruits gabble faster. All the voices share one scale, so they stay in tune with each other. When several conversations run at once you hear the one nearest the camera. |
 | 📜 **Recap** | When the game ends, read back who killed whom, how every vote went, and when each fruit changed its mind about another, marked right or wrong. |
 | 🍐 **Thirteen fruits** | Apple, orange, lemon, plum, pear, lime, peach, blueberry, cherry, kiwi, banana, strawberry and watermelon, each with its own shape. Every visit starts with a random village. |
 | ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, and sound on or off. |
@@ -86,7 +87,7 @@ Open the address it prints, normally http://localhost:5173/OneBadApple/, choose 
 1. **Night.** Everyone walks home. If there is more than one wolf, they meet to whisper about who to kill. A wolf runs over with a knife and slices its victim, unless the doctor guarded them. The seer learns one fruit's side.
 2. **Dawn.** The village finds out who died and what they were.
 3. **Talking it over.** The fruits pair off for one or more rounds of private conversation.
-4. **The vote.** Everyone gathers in the circle, points at their choice and says why. The fruit with the most votes says its last words and is flung out. A tie eliminates nobody.
+4. **The vote.** Everyone gathers in the circle, points at their choice and says why. The fruit with the most votes says its last words and is shot. A tie eliminates nobody.
 
 ### Who wins
 
@@ -178,6 +179,7 @@ src/
 └── components/             what you see
     ├── Fruit.tsx           one fruit: wobble physics, legs, arms, face, bubbles
     ├── Ghost.tsx           the ghost of a dead fruit
+    ├── BubbleLayout.tsx    keeps speech bubbles from covering each other
     ├── fruitShapes.tsx     the fruit shapes, and how each one slices
     ├── Stage.tsx           the white stage, grid floor and lights
     ├── SetupPanel.tsx      the setup screen

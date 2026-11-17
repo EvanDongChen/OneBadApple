@@ -21,6 +21,9 @@ interface Said {
   about?: string
 }
 
+/** Something the dead might have an opinion on. */
+export type GhostEvent = 'death' | 'saved' | 'ballot-wrong' | 'ballot-right' | 'out-wrong' | 'out-right' | 'tie' | 'whisper'
+
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
 function pick<T>(items: T[]): T {
@@ -363,6 +366,26 @@ export class MockBrain implements Brain {
       cast.push(`${f.name}: I vote ${nameOf(choice.target)}.`)
     }
     return { rounds, votes }
+  }
+
+  /** What a ghost thinks of something that just happened. A dead werewolf still roots for the pack. */
+  ghostThought(ghost: FruitState, event: GhostEvent, about?: Other): string {
+    if (ghost.role === 'werewolf') {
+      if (event === 'tie') return this.line(D.GHOST_TIE)
+      const bad = event === 'saved' || event === 'ballot-right' || event === 'out-right'
+      return this.line(bad ? D.GHOST_WOLF_SORE : D.GHOST_WOLF_GLAD, about)
+    }
+    const pools: Record<GhostEvent, string[]> = {
+      death: D.GHOST_DEATH,
+      saved: D.GHOST_SAVED,
+      'ballot-wrong': D.GHOST_BALLOT_WRONG,
+      'ballot-right': D.GHOST_BALLOT_RIGHT,
+      'out-wrong': D.GHOST_OUT_WRONG,
+      'out-right': D.GHOST_OUT_RIGHT,
+      tie: D.GHOST_TIE,
+      whisper: D.GHOST_WHISPER,
+    }
+    return this.line(pools[event], about)
   }
 
   /** The hunter's last words. */

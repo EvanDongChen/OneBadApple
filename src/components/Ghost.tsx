@@ -7,6 +7,7 @@ import { fruitPositions, useSim } from '../sim/store'
 import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, LIMB_COLOR } from './fruitShapes'
+import RichText from './RichText'
 
 const RING = 13.2 // ghosts drift around the stage outside the ring of homes
 const FLOAT_HEIGHT = 2.2
@@ -20,6 +21,7 @@ const WAIT = 1.4 // seconds the body lies there before its ghost rises
 export default function Ghost({ id }: { id: string }) {
   const fruit = useSim((s) => s.fruits.find((f) => f.id === id))
   const reaction = useSim((s) => s.reactions[id])
+  const thought = useSim((s) => s.ghostThoughts[id])
   const group = useRef<Group>(null)
   const mouths = useRef<(Mesh | null)[]>([])
   const born = useRef(performance.now())
@@ -102,6 +104,11 @@ export default function Ghost({ id }: { id: string }) {
       </group>
       <Html center position={[0, 1.15, 0]} zIndexRange={[10, 0]}>
         <div className="fruit-tag ghost">
+          {thought && (
+            <div className="bubble thought">
+              <RichText text={thought} />
+            </div>
+          )}
           {reaction && <Emote reaction={reaction} />}
           <div className="name">
             {fruit.name}

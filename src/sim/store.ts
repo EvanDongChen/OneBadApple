@@ -152,6 +152,10 @@ export interface SimState {
   chopped: Record<string, boolean | undefined>
   /** The winners' dance party: when it started (for keeping time) and who is dancing. */
   party: { at: number; dancers: string[] } | null
+  /** The vote being carried out: one voter draws a gun on the condemned fruit, and `firing` is the shot. */
+  execution: { shooterId: string; targetId: string; firing: boolean } | null
+  /** What each ghost is thinking right now, shown over its head. */
+  ghostThoughts: Record<string, string | undefined>
   /** Body language each fruit is showing right now. */
   reactions: Record<string, Reaction | undefined>
   /** Everything worth retelling once the game is over. */
@@ -197,6 +201,8 @@ function setupState(roster: FruitDef[]) {
     thinking: {},
     attack: null,
     party: null,
+    execution: null,
+    ghostThoughts: {},
     reactions: {},
     chopped: {},
     focusId: null,
