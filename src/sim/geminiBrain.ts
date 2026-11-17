@@ -1,4 +1,5 @@
 import { MockBrain } from './mockBrain'
+import { quirkText } from './quirks'
 import type { Brain, Conversation, DayScript, FruitState, NightScript, Role, WorldView } from './types'
 
 const API = 'https://generativelanguage.googleapis.com/v1beta'
@@ -46,7 +47,7 @@ export function buildPersona(fruit: Pick<FruitState, 'name' | 'kind' | 'role' | 
     `${fruit.name} is a little ${fruit.kind} with legs.`,
     `Role: ${ROLE_BRIEF[fruit.role]}`,
     `Personality: aggression ${level(t.aggression)}, honesty ${level(t.honesty)}, talkativeness ${level(t.talkativeness)}, suspicion of others ${level(t.suspicion)}.`,
-    t.quirk ? `Quirk: ${t.quirk}` : '',
+    t.quirks.length ? `Quirks: ${t.quirks.map(quirkText).join(' ')}` : '',
   ]
     .filter(Boolean)
     .join(' ')

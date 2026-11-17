@@ -21,13 +21,14 @@ export type Phase = 'setup' | 'night' | 'dawn' | 'talk' | 'vote' | 'over'
 
 export type Winner = 'village' | 'werewolves' | 'jester'
 
-/** Personality sliders, each 0..1, plus a free-text quirk. */
+/** Personality sliders, each 0..1, plus up to three quirks. */
 export interface Traits {
   aggression: number
   honesty: number
   talkativeness: number
   suspicion: number
-  quirk: string
+  /** Each is a preset's id (see quirks.ts) or, for one the user wrote, the text itself. */
+  quirks: string[]
 }
 
 export const TRAIT_KEYS = ['aggression', 'honesty', 'talkativeness', 'suspicion'] as const

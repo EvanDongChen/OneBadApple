@@ -275,6 +275,25 @@ label {
   gap: 16px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand img {
+  width: 76px;
+  height: 76px;
+  flex: none;
+  transform: rotate(-6deg);
+  filter: drop-shadow(0 4px 0 var(--ink));
+}
+
+.brand h1 {
+  font-size: 40px;
+  line-height: 0.92;
+}
+
 .tagline {
   font-weight: 800;
   margin-top: -6px;
@@ -303,6 +322,103 @@ label {
   background: #fff;
   border: 2.5px solid var(--ink);
   border-radius: 12px;
+}
+
+/* ---------- Quirks: chips you drag onto villagers ---------- */
+
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--paper-dark);
+  border: 2.5px dashed var(--ink);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--display);
+  font-size: 13px;
+  line-height: 1;
+  padding: 5px 9px 4px;
+  background: var(--tint, #fff);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 var(--ink);
+  cursor: grab;
+  user-select: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip:active {
+  cursor: grabbing;
+}
+
+.chip.custom {
+  border-style: dashed;
+}
+
+/* The quirk you have picked up by tapping it. */
+.chip.held {
+  outline: 3px solid var(--apple);
+  outline-offset: 1px;
+  transform: translateY(-2px) rotate(-3deg);
+}
+
+.chip:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 1px;
+}
+
+button.chip-x {
+  font-family: var(--body);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 0 1px;
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  background: rgb(0 0 0 / 14%);
+}
+
+button.chip-x:active:not(:disabled) {
+  transform: none;
+}
+
+.card-quirks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px 8px;
+}
+
+/* A villager you can drop the quirk on. */
+.card.over,
+.card.target:hover {
+  outline: 3px solid var(--sun);
+  outline-offset: 1px;
+  background: #fffbea;
+}
+
+.card.target .card-head {
+  cursor: copy;
 }
 
 .card-head {
@@ -956,18 +1072,6 @@ button.roster-row.on {
   border: solid var(--ink);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
-}
-
-/* A bubble lifted clear of another one stays joined to its fruit by a line. */
-.fruit-tag .bubble::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  width: 2.5px;
-  margin-left: -1px;
-  height: var(--lift, 0px);
-  background: var(--ink);
 }
 
 /* Private thought: a dashed cloud with trailing dots instead of a tail. */

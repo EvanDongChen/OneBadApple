@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Vector3 } from 'three'
+import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
 import type { FruitDef, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
 
@@ -12,17 +13,6 @@ const NAMES = [
   'Pip', 'Clem', 'Zest', 'Dusk', 'Bosc', 'Key', 'Fuzz', 'Indigo', 'Bing', 'Tang', 'Mango', 'Fig',
   'Juju', 'Pomelo', 'Quince', 'Rind', 'Nectar', 'Pith', 'Sorbet', 'Jam', 'Peel', 'Mellow', 'Tart', 'Squash',
 ]
-const QUIRKS = [
-  'Ends sentences with a nervous laugh.',
-  'Convinced it is the smartest fruit in the village.',
-  'Speaks like a tired old sailor.',
-  'Extremely polite, even when accusing someone.',
-  'Easily distracted by snacks and naps.',
-  'Dramatic. Everything is the end of the world.',
-  'Suspicious of anyone who is too nice.',
-  'Loves gossip more than the truth.',
-]
-
 export interface Settings {
   brain: 'test' | 'gemini'
   apiKey: string
@@ -73,12 +63,14 @@ export function maxWolves(fruitCount: number) {
 
 function randomTraits(): Traits {
   const r = () => Math.round(Math.random() * 10) / 10
+  // One quirk, sometimes two.
+  const presets = [...QUIRK_PRESETS].sort(() => Math.random() - 0.5)
   return {
     aggression: r(),
     honesty: r(),
     talkativeness: r(),
     suspicion: r(),
-    quirk: QUIRKS[Math.floor(Math.random() * QUIRKS.length)],
+    quirks: presets.slice(0, Math.random() < 0.3 ? 2 : 1).map((p) => p.id),
   }
 }
 

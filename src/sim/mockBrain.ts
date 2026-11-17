@@ -1,4 +1,5 @@
 import * as D from './dialog'
+import { presetOf } from './quirks'
 import type { Brain, Conversation, DayScript, FruitState, NightScript, WorldView } from './types'
 
 type Other = { id: string; name: string }
@@ -194,7 +195,7 @@ export class MockBrain implements Brain {
           : harsh
             ? D.VOTE_HARSH
             : D.VOTE_MILD
-    return { target: target.id, reason: this.line(pool) }
+    return { target: target.id, reason: this.withTic(view.self, this.line(pool)) }
   }
 
   private nightAction(view: AgentView, candidates: Other[]): string {
@@ -292,6 +293,12 @@ export class MockBrain implements Brain {
     return lines
   }
 
+  /** Now and then a fruit's quirk shows: a little phrase of its own on the end of the line. */
+  private withTic(fruit: FruitState, say: string): string {
+    const tics = fruit.traits.quirks.flatMap((q) => presetOf(q)?.tics ?? [])
+    return tics.length && Math.random() < 0.4 ? `${say} ${pick(tics)}` : say
+  }
+
   /** What a fruit cries out if it is the one voted out. */
   private lastCry(fruit: FruitState): string {
     if (fruit.role === 'werewolf') return this.line(D.LAST_WOLF)
@@ -336,7 +343,8 @@ export class MockBrain implements Brain {
       const previous = members[(t + members.length - 1) % members.length]
       const next = members[(t + 1) % members.length]
       const view = this.view(world, speaker, [...(extra.get(speaker.id) ?? []), ...said])
-      const [say, meta] = t === 0 ? this.opener(view, next) : this.reply(view, previous, last)
+      const [plain, meta] = t === 0 ? this.opener(view, next) : this.reply(view, previous, last)
+      const say = this.withTic(speaker, plain)
       last = meta
       lines.push({ id: speaker.id, say, accuses: meta.tone === 'accuse' ? meta.about : undefined })
       said.push(`${speaker.name}: ${say}`)
