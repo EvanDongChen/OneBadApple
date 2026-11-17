@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
-import { Group, Mesh, Quaternion, Vector3 } from 'three'
+import { DoubleSide, Group, Mesh, Quaternion, Vector3 } from 'three'
 import { PARTY_BEAT_MS } from '../sim/sfx'
 import { fruitPositions, useSim } from '../sim/store'
 import Emote from './Emote'
@@ -101,12 +101,19 @@ export default function Fruit({ id }: { id: string }) {
   // Carrying out the vote: this fruit holds the gun, and `firing` is the moment of the shot.
   const gunning = useSim((s) => s.execution?.shooterId === id)
   const firing = useSim((s) => s.execution?.shooterId === id && s.execution.firing)
+  // The doctor's protection around this fruit, the moment the knife hits it, and the plaster left afterwards.
+  const shielded = useSim((s) => s.shield?.id === id)
+  const shieldHit = useSim((s) => s.shield?.id === id && s.shield.hit)
+  const bandaged = useSim((s) => !!s.bandaged[id])
+  /** This fruit is the wolf, and its knife has just bounced off the doctor's protection. */
+  const repelled = useSim((s) => s.attack?.attackerId === id && s.shield?.id === s.attack.victimId && s.shield.hit)
   const armed = useSim((s) => s.attack?.attackerId === id)
   const striking = useSim((s) => s.attack?.attackerId === id && s.attack.striking)
   // Set when the fruit is chopped: where the whole body was, so the slices can take its place.
   const [chop, setChop] = useState<{ position: [number, number, number]; quaternion: [number, number, number, number] } | null>(null)
   const knife = useRef<Group>(null)
   const gun = useRef<Group>(null)
+  const shield = useRef<Mesh>(null)
   const { alive, kind } = fruit
   // Where the face and arms sit on this fruit's particular shape.
   const face = useMemo(() => anchors(kind), [kind])
@@ -197,6 +204,20 @@ export default function Fruit({ id }: { id: string }) {
     const m = b.mass()
     b.applyImpulse({ x: (-(target.x - t.x) / d) * m * 2.2, y: m * 1.5, z: (-(target.z - t.z) / d) * m * 2.2 }, true)
   }, [firing])
+
+  // The wolf is thrown back when its knife hits the doctor's protection.
+  useEffect(() => {
+    const b = body.current
+    const victimId = useSim.getState().attack?.victimId
+    const victim = victimId ? fruitPositions.get(victimId) : undefined
+    if (!repelled || !b || !victim) return
+    const t = b.translation()
+    const d = Math.hypot(victim.x - t.x, victim.z - t.z) || 1
+    const m = b.mass()
+    b.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    b.applyImpulse({ x: (-(victim.x - t.x) / d) * m * 6, y: m * 5, z: (-(victim.z - t.z) / d) * m * 6 }, true)
+    b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 2, y: 0, z: (Math.random() - 0.5) * m * 2 }, true)
+  }, [repelled])
 
   // The wolf lunges at its victim when it strikes.
   useEffect(() => {
@@ -391,6 +412,13 @@ export default function Fruit({ id }: { id: string }) {
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
 
+    // The doctor's bubble stays upright around the fruit, pulses gently, and flares when struck.
+    if (shield.current) {
+      shield.current.visible = !!shielded && alive
+      shield.current.position.copy(v.pos)
+      shield.current.scale.setScalar(shieldHit ? 1.22 + Math.sin(performance.now() * 0.06) * 0.05 : 1 + Math.sin(performance.now() * 0.004) * 0.04)
+    }
+
     // Mouth: resting line when quiet; while talking, snap to a new shape every few frames.
     let shape = 0
     if (speechText && alive) {
@@ -558,6 +586,22 @@ export default function Fruit({ id }: { id: string }) {
             </group>
           ))}
 
+          {/* A sticking plaster on the brow of a fruit that survived the knife. */}
+          {bandaged && (
+            <group position={[-0.16, face.y + 0.22, face.eyeZ * 0.9]} rotation={[-0.35, -0.3, 0.5]}>
+              {[0, Math.PI / 2].map((turn) => (
+                <mesh key={turn} rotation={[0, 0, turn]} position={[0, 0, turn ? 0.002 : 0]}>
+                  <planeGeometry args={[0.2, 0.065]} />
+                  <meshBasicMaterial color="#f1d9b0" side={DoubleSide} />
+                </mesh>
+              ))}
+              <mesh position={[0, 0, 0.004]}>
+                <planeGeometry args={[0.065, 0.065]} />
+                <meshBasicMaterial color="#fffaf0" side={DoubleSide} />
+              </mesh>
+            </group>
+          )}
+
           {/* Flat mouth shapes, one visible at a time: line, short line, "o", open oval, open grin, frown. */}
           <group position={[0, face.y - 0.06, face.mouthZ + 0.008]}>
             {[
@@ -599,6 +643,12 @@ export default function Fruit({ id }: { id: string }) {
           <meshStandardMaterial color="#eef2f5" emissive="#aeb8c2" emissiveIntensity={0.7} roughness={0.3} />
         </mesh>
       </group>
+
+      {/* The doctor's protection: a see-through bubble. */}
+      <mesh ref={shield} visible={false}>
+        <sphereGeometry args={[1, 24, 16]} />
+        <meshBasicMaterial color={shieldHit ? '#eafff6' : '#6fe0bd'} transparent opacity={shieldHit ? 0.55 : 0.24} depthWrite={false} />
+      </mesh>
 
       {/* The gun: barrel along its own forward axis, grip below, and a flash at the muzzle for the shot. */}
       <group ref={gun} visible={false} scale={1.6}>
@@ -662,10 +712,11 @@ export default function Fruit({ id }: { id: string }) {
               </div>
             )}
             {votesAgainst > 0 && alive && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
-            {reaction && <Emote reaction={reaction} />}
             <div className="name">
+              {shielded && <span className="guard" title="Protected by the doctor tonight" />}
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
+              {reaction && <Emote reaction={reaction} />}
             </div>
           </div>
         </Html>

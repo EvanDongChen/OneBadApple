@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { Vector3 } from 'three'
 import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
-import type { FruitDef, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
+import type { FruitDef, FruitKind, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
@@ -146,6 +146,14 @@ export interface SimState {
   party: { at: number; dancers: string[] } | null
   /** The vote being carried out: one voter draws a gun on the condemned fruit, and `firing` is the shot. */
   execution: { shooterId: string; targetId: string; firing: boolean } | null
+  /** The doctor's protection for the night: a bubble around one fruit. `hit` is the knife bouncing off it. */
+  shield: { id: string; hit: boolean } | null
+  /** Fruits that survived an attack and wear a plaster for the rest of the game. */
+  bandaged: Record<string, boolean | undefined>
+  /** Juice left on the floor where a fruit was chopped or shot. */
+  splats: { x: number; z: number; kind: FruitKind; size: number; seed: number }[]
+  /** Comic sound words ("CHOP!") bursting over the stage right now. */
+  bursts: { key: number; text: string; at: [number, number, number] }[]
   /** What each ghost is thinking right now, shown over its head. */
   ghostThoughts: Record<string, string | undefined>
   /** Body language each fruit is showing right now. */
@@ -194,6 +202,10 @@ function setupState(roster: FruitDef[]) {
     attack: null,
     party: null,
     execution: null,
+    shield: null,
+    bandaged: {},
+    splats: [],
+    bursts: [],
     ghostThoughts: {},
     reactions: {},
     chopped: {},

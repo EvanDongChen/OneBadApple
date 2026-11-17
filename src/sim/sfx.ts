@@ -163,6 +163,13 @@ export function babble(fruit: Pick<FruitDef, 'id' | 'kind' | 'traits'>, variant:
   }
 }
 
+/** The knife ringing off the doctor's protection. */
+export function clang() {
+  tone(1250, 0, 0.3, 'square', 0.07, 1150)
+  tone(1870, 0, 0.35, 'triangle', 0.09, 1800)
+  tone(2600, 0.01, 0.2, 'sine', 0.05)
+}
+
 /** A gunshot: a crack of noise that dies away fast, over a low thump. */
 export function gunshot() {
   if (!ctx || useSim.getState().settings.muted) return

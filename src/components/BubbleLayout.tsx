@@ -26,8 +26,8 @@ export default function BubbleLayout() {
         // Where the bubble would be if it had not been lifted.
         return { el, left: rect.left, right: rect.right, top: rect.top + lift, bottom: rect.bottom + lift, lift, want: 0 }
       })
-      // Other fruits' name tags never move, and a bubble should not sit under one either.
-      const names = [...document.querySelectorAll<HTMLElement>('.fruit-tag .name')].map((el) => {
+      // Other fruits' name tags and reaction marks never move, and a bubble should not sit under one either.
+      const names = [...document.querySelectorAll<HTMLElement>('.fruit-tag .name, .fruit-tag .emote')].map((el) => {
         const rect = el.getBoundingClientRect()
         return { el, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, lift: 0, want: 0 }
       })

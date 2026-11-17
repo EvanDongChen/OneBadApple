@@ -109,10 +109,10 @@ export default function Ghost({ id }: { id: string }) {
               <RichText text={thought} />
             </div>
           )}
-          {reaction && <Emote reaction={reaction} />}
           <div className="name">
             {fruit.name}
             <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>
+            {reaction && <Emote reaction={reaction} />}
           </div>
         </div>
       </Html>

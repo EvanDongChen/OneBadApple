@@ -1,7 +1,7 @@
 import { buildPersona, GeminiBrain } from './geminiBrain'
 import { MockBrain } from './mockBrain'
 import type { GhostEvent } from './mockBrain'
-import { babble, cheer, dawnChime, gasp, gunshot, nightChime, slice, startParty, stopParty, sulk, thud, voteTick } from './sfx'
+import { babble, cheer, clang, dawnChime, gasp, gunshot, nightChime, slice, startParty, stopParty, sulk, thud, voteTick } from './sfx'
 import { fruitPositions, layout, maxWolves, useSim } from './store'
 import type { Brain, Conversation, DayScript, FruitState, LogEntry, NightScript, Phase, Reaction, RecapEvent, Role, Rules, Winner, WorldView } from './types'
 
@@ -175,9 +175,24 @@ async function say(fruit: FruitState, text: string, entry: Pick<LogEntry, 'kind'
   await wait(250, signal)
 }
 
+let burstKey = 0
+
+/** Flash a comic sound word over a fruit, or over the middle of the stage if none is given. */
+function burst(text: string, fruitId?: string) {
+  const p = fruitId ? fruitPositions.get(fruitId) : undefined
+  const key = ++burstKey
+  set((s) => ({ bursts: [...s.bursts, { key, text, at: p ? [p.x, p.y + 1.5, p.z] : [0, 3.4, 0] }] }))
+  // Real time, not game time: the word should not hang about when the game is paused.
+  setTimeout(() => set((s) => ({ bursts: s.bursts.filter((b) => b.key !== key) })), 1100)
+}
+
 /** Kill a fruit. `chop` makes it fall apart in slices; otherwise it is flung whole. */
 function kill(id: string, chop: boolean) {
+  const p = fruitPositions.get(id)
+  const fruit = byId(id)
   set((s) => ({
+    // Juice on the floor where it happened.
+    splats: p ? [...s.splats, { x: p.x, z: p.z, kind: fruit.kind, size: chop ? 1 : 1.5, seed: Math.random() * 100 }] : s.splats,
     chopped: { ...s.chopped, [id]: chop },
     fruits: s.fruits.map((f) => (f.id === id ? { ...f, alive: false } : f)),
     follow: { ...s.follow, [id]: undefined },
@@ -247,6 +262,7 @@ async function hunterShot(dead: FruitState, revenge: string | null, signal: Abor
   slice()
   await wait(500, signal)
   kill(target.id, false)
+  burst('BANG!', target.id)
   record({ kind: 'shot', day: get().day, hunter: dead.id, target: target.id })
   gasp()
   react(alive().map((f) => f.id), 'gasp', 1400, signal)
@@ -344,6 +360,9 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
 
   if (wolves.length > 1 && script.wolfChat?.length) await wolfHuddle(wolves, script.wolfChat, signal)
 
+  // The doctor's protection shows as a bubble around whoever it chose.
+  if (doctor && script.protect) set({ shield: { id: script.protect, hit: false } })
+
   // Act it out: the wolf hurries over with a knife, lunges, and the victim is chopped.
   set((s) => ({ follow: { ...s.follow, [attacker.id]: victim.id }, attack: { attackerId: attacker.id, victimId: victim.id, striking: false } }))
   await until(() => near(attacker.id, victim.id, 2), 9000, signal)
@@ -352,14 +371,22 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   slice()
   await wait(280, signal)
   const saved = script.protect === victim.id
-  if (!saved) kill(victim.id, true)
+  if (saved) {
+    // The knife rings off the bubble. The victim is left with a plaster to show for it.
+    set((s) => ({ shield: s.shield && { ...s.shield, hit: true }, bandaged: { ...s.bandaged, [victim.id]: true } }))
+    clang()
+    burst('CLANG!', victim.id)
+  } else {
+    kill(victim.id, true)
+    burst('CHOP!', victim.id)
+  }
   record(saved ? { kind: 'saved', day, wolf: attacker.id, victim: victim.id, doctor: doctor?.id ?? '' } : { kind: 'kill', day, wolf: attacker.id, victim: victim.id })
   await wait(1400, signal)
   // Day only breaks once the wolf has hurried back to its own spot.
   set((s) => ({ attack: s.attack && { ...s.attack, striking: false } }))
   sendTo((f) => f.home)
   await until(() => arrived(wolves.map((w) => w.id)), 10000, signal)
-  set({ attack: null })
+  set({ attack: null, shield: null })
   await wait(700, signal)
 
   setPhase('dawn')
@@ -376,6 +403,7 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
     // Everyone turns to the body and flinches.
     set({ focusId: victim.id })
     gasp()
+    burst('GASP!')
     react(get().fruits.filter((f) => f.id !== victim.id).map((f) => f.id), 'gasp', 1800, signal)
     ghostsThink('death', victim, signal)
     await hunterShot(victim, script.revenge, signal)
@@ -469,6 +497,7 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
       await wait(1100, signal)
       set((s) => ({ execution: s.execution && { ...s.execution, firing: true } }))
       gunshot()
+      burst('BANG!', shooter.id)
     }
     kill(out.id, false)
     if (shooter) {
@@ -577,6 +606,10 @@ async function run(signal: AbortSignal) {
     party: null,
     reactions: {},
     execution: null,
+    shield: null,
+    bandaged: {},
+    splats: [],
+    bursts: [],
     ghostThoughts: {},
     recap: [],
     calls: 0,
