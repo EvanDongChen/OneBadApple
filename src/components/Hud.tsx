@@ -28,6 +28,7 @@ export default function Hud() {
   const speed = useSim((s) => s.speed)
   const revealRoles = useSim((s) => s.revealRoles)
   const showThoughts = useSim((s) => s.showThoughts)
+  const director = useSim((s) => s.director)
   const winner = useSim((s) => s.winner)
   const calls = useSim((s) => s.calls)
   const settings = useSim((s) => s.settings)
@@ -55,6 +56,9 @@ export default function Hud() {
           <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>Speed {speed}x</button>
           <button className={revealRoles ? 'on' : ''} onClick={() => useSim.setState({ revealRoles: !revealRoles })}>
             {revealRoles ? 'Hide roles' : 'Peek at roles'}
+          </button>
+          <button className={director ? 'on' : ''} title="The camera follows the action by itself" onClick={() => useSim.setState({ director: !director })}>
+            {director ? 'Director on' : 'Director off'}
           </button>
           <button className={showThoughts ? 'on' : ''} onClick={() => useSim.setState({ showThoughts: !showThoughts })}>
             {showThoughts ? 'Hide thoughts' : 'Show thoughts'}
