@@ -1,9 +1,10 @@
 import { buildPersona, GeminiBrain } from './geminiBrain'
+import { absorb, cloneMind, episodesOf, nightfall, startMind } from './mind'
 import { MockBrain } from './mockBrain'
 import type { GhostEvent } from './mockBrain'
 import { babble, cheer, clang, dawnChime, gasp, gunshot, nightChime, slice, startParty, stopParty, sulk, thud, voteTick } from './sfx'
 import { fruitPositions, layout, maxWolves, useSim } from './store'
-import type { Brain, Conversation, DayScript, FruitState, LogEntry, NightScript, Phase, Reaction, RecapEvent, Role, Rules, Winner, WorldView } from './types'
+import type { Brain, Conversation, DayScript, Episode, FruitState, LogEntry, NightScript, Phase, Reaction, RecapEvent, Role, Rules, Winner, WorldView } from './types'
 
 const ROLE_LABEL: Record<Role, string> = {
   werewolf: 'a werewolf',
@@ -86,6 +87,28 @@ function near(a: string, b: string, range: number) {
 
 function log(entry: LogEntry) {
   get().addLog(entry)
+}
+
+/** Some fruits witness something: each one remembers it, and its beliefs and mood shift. */
+function witness(ids: string[], episode: Episode) {
+  set((s) => ({
+    fruits: s.fruits.map((f) => {
+      if (!ids.includes(f.id) || !f.alive) return f
+      const next = cloneMind(f)
+      absorb(next, episode)
+      return next
+    }),
+  }))
+}
+
+const VOUCHING = /\b(innocent|clean|trust|vouch|believe|not (a|the) wol(f|ves)|on our side|leave .* alone)\b/i
+
+/** For Gemini's lines: guess who a line stands up for, from a trusting word next to a name in the group. */
+function vouchedBy(line: Conversation['lines'][number], members: string[], accused: string | undefined): string | undefined {
+  if (line.vouches) return members.includes(line.vouches) || byId(line.vouches).alive ? line.vouches : undefined
+  if (accused || ACCUSING.test(line.say) || !VOUCHING.test(line.say)) return undefined
+  const text = line.say.toLowerCase()
+  return members.find((id) => id !== line.id && text.includes(byId(id).name.toLowerCase()))
 }
 
 /** Note something down for the end-of-game recap. */
@@ -201,7 +224,7 @@ function kill(id: string, chop: boolean) {
 }
 
 /** Store each fruit's new thought and feelings so the next prompt (and the UI) can use them. */
-function applyMinds(minds: NightScript['minds']) {
+function applyMinds(minds: NightScript['minds'], fromBeliefs = false) {
   const { day, fruits } = get()
   for (const mind of minds) {
     const fruit = fruits.find((f) => f.id === mind.id)
@@ -219,8 +242,15 @@ function applyMinds(minds: NightScript['minds']) {
       const mind = minds.find((m) => m.id === f.id)
       if (!mind) return f
       const feelings = { ...f.feelings }
-      for (const feel of mind.feelings) feelings[feel.about] = { trust: feel.trust, note: feel.note }
-      return { ...f, thought: mind.thought || f.thought, feelings }
+      const beliefs = { ...f.beliefs }
+      for (const feel of mind.feelings) {
+        feelings[feel.about] = { trust: feel.trust, note: feel.note }
+        // When the AI wrote the trust scores, they become the fruit's beliefs. Knowledge (0 or 100) stays put.
+        if (!fromBeliefs && feel.about in beliefs && beliefs[feel.about] !== 0 && beliefs[feel.about] !== 100) {
+          beliefs[feel.about] = Math.max(2, Math.min(98, 50 - feel.trust * 10))
+        }
+      }
+      return { ...f, thought: mind.thought || f.thought, feelings, beliefs }
     }),
   }))
 }
@@ -263,6 +293,7 @@ async function hunterShot(dead: FruitState, revenge: string | null, signal: Abor
   await wait(500, signal)
   kill(target.id, false)
   burst('BANG!', target.id)
+  witness(alive().map((f) => f.id), { kind: 'death', day: get().day, target: target.id, role: target.role, by: 'hunter' })
   record({ kind: 'shot', day: get().day, hunter: dead.id, target: target.id })
   gasp()
   react(alive().map((f) => f.id), 'gasp', 1400, signal)
@@ -282,8 +313,8 @@ function ghostsReact(targetIsWolf: boolean, ms: number, signal: AbortSignal, exc
  * A ghost or two thinks something about what just happened. The thought floats over the
  * ghost for a few seconds and goes in the log; no living fruit ever hears it.
  */
-function ghostsThink(event: GhostEvent, about: FruitState | undefined, signal: AbortSignal, opts: { max?: number; except?: string } = {}) {
-  const ghosts = shuffle(get().fruits.filter((f) => !f.alive && f.id !== opts.except && f.id !== about?.id)).slice(0, opts.max ?? 2)
+function ghostsThink(event: GhostEvent, about: FruitState | undefined, signal: AbortSignal, opts: { max?: number; except?: string; only?: string } = {}) {
+  const ghosts = shuffle(get().fruits.filter((f) => !f.alive && f.id !== opts.except && f.id !== about?.id && (!opts.only || f.id === opts.only))).slice(0, opts.max ?? 2)
   ghosts.forEach((ghost, i) => {
     const text = stockLines.ghostThought(ghost, event, about)
     wait(200 + i * 700, signal)
@@ -331,13 +362,22 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   setPhase('night')
   nightChime()
   log({ kind: 'system', text: `Night ${day} falls. Everyone heads home.` })
+  // Feelings fade overnight, though not all the way.
+  set((s) => ({
+    fruits: s.fruits.map((f) => {
+      if (!f.alive) return f
+      const next = cloneMind(f)
+      nightfall(next)
+      return next
+    }),
+  }))
   sendTo((f) => f.home)
   // One batched call decides the whole night while the fruits walk home.
   const [script] = await Promise.all([
     think(() => brain.playNight(world())),
     until(() => arrived(alive().map((f) => f.id)), 10000, signal),
   ])
-  applyMinds(script.minds)
+  applyMinds(script.minds, script.fromBeliefs)
 
   const living = alive()
   const wolves = living.filter((f) => f.role === 'werewolf')
@@ -352,6 +392,8 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   if (seer && script.inspect) {
     const seen = byId(script.inspect)
     record({ kind: 'inspect', day, seer: seer.id, target: seen.id, wolf: seen.role === 'werewolf' })
+    // What the seer saw is knowledge, not a guess.
+    set((s) => ({ fruits: s.fruits.map((f) => (f.id === seer.id ? { ...f, beliefs: { ...f.beliefs, [seen.id]: seen.role === 'werewolf' ? 100 : 0 } } : f)) }))
     remember(
       seer.id,
       `Night ${day}: you inspected ${seen.name}. ${seen.name} is ${seen.role === 'werewolf' ? 'a WEREWOLF' : 'NOT a werewolf'}.`,
@@ -405,6 +447,7 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
     gasp()
     burst('GASP!')
     react(get().fruits.filter((f) => f.id !== victim.id).map((f) => f.id), 'gasp', 1800, signal)
+    witness(alive().map((f) => f.id), { kind: 'death', day, target: victim.id, role: victim.role, by: 'wolf' })
     ghostsThink('death', victim, signal)
     await hunterShot(victim, script.revenge, signal)
   }
@@ -444,6 +487,9 @@ async function talkRound(groups: Conversation[], round: number, total: number, s
         hear(group.members, `${speaker.name}: ${line.say}`)
         // A fruit accused to its face shakes while it is being talked about.
         const accused = accusedBy(line, group.members)
+        // Everyone in the group remembers what was said, and it shifts what they believe.
+        const told = { ...line, accuses: accused ?? line.accuses, vouches: vouchedBy(line, group.members, accused) }
+        for (const episode of episodesOf(told, get().day)) witness(group.members, episode)
         if (accused) react([accused], 'shake', 1500 + line.say.length * 40, signal)
         // Nervous fruits rattle whenever anyone near them is accused, not only when it is them.
         const nervous = group.members.filter((id) => id !== accused && id !== speaker.id && byId(id).traits.quirks.includes('nervous'))
@@ -460,6 +506,8 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
   setPhase('vote')
   set({ votes: {} })
   log({ kind: 'system', text: 'Everyone gathers in the circle to vote.' })
+  // The frightened tremble on their way in.
+  react(alive().filter((f) => f.mood.fear > 0.55).map((f) => f.id), 'shake', 1800, signal)
   sendTo((f) => f.seat)
   await until(() => arrived(alive().map((f) => f.id)), 10000, signal)
 
@@ -468,6 +516,9 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
     // The voter turns and points at its choice; the tally shows over the target's head.
     set((s) => ({ votes: { ...s.votes, [ballot.id]: target.id }, lookAt: { ...s.lookAt, [ballot.id]: target.id } }))
     voteTick()
+    witness(alive().map((f) => f.id), { kind: 'vote', day: get().day, actor: ballot.id, target: target.id })
+    // A claim made while voting is heard by the whole village.
+    if (ballot.claim) witness(alive().map((f) => f.id), { kind: 'claim', day: get().day, actor: ballot.id, ...ballot.claim })
     react([target.id], 'shake', 1500, signal)
     ghostsReact(target.role === 'werewolf', 1400, signal)
     if (Math.random() < 0.4) ghostsThink(target.role === 'werewolf' ? 'ballot-right' : 'ballot-wrong', target, signal, { max: 1 })
@@ -508,6 +559,7 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
       set((s) => ({ execution: s.execution && { ...s.execution, firing: false } }))
     }
     record({ kind: 'vote', day: get().day, ballots, out: out.id, tied: [] })
+    witness(alive().map((f) => f.id), { kind: 'death', day: get().day, target: out.id, role: out.role, by: 'vote' })
     log({ kind: 'system', text: `${out.name} is voted out with ${top} votes. They were ${ROLE_LABEL[out.role]}.` })
     if (out.role === 'jester') jester = out
     else {
@@ -532,6 +584,29 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
   return jester
 }
 
+/**
+ * Feelings carried over from yesterday show before the talking starts: the grieving hang
+ * their heads, and a fruit that helped vote out an innocent says sorry to its ghost.
+ */
+async function moodsShow(signal: AbortSignal) {
+  const living = alive()
+  react(living.filter((f) => f.mood.grief > 0.4).map((f) => f.id), 'sulk', 2600, signal)
+  const sorry = living.filter((f) => f.mood.guilt > 0.3 && f.role !== 'werewolf').slice(0, 2)
+  for (const fruit of sorry) {
+    // The innocent fruit it most recently helped vote out.
+    const wronged = [...fruit.events].reverse().find((e) => e.kind === 'death' && e.by === 'vote' && e.role !== 'werewolf')
+    const ghost = wronged && 'target' in wronged ? byId(wronged.target) : undefined
+    if (!ghost || ghost.alive || !fruit.events.some((e) => e.kind === 'vote' && e.actor === fruit.id && e.target === ghost.id)) continue
+    set((s) => ({ lookAt: { ...s.lookAt, [fruit.id]: `ghost:${ghost.id}` } }))
+    await wait(500, signal)
+    await say(fruit, stockLines.apology(ghost), { kind: 'say', to: `${ghost.name}'s ghost` }, signal)
+    react([ghost.id], 'cheer', 1600, signal)
+    ghostsThink('apology', undefined, signal, { only: ghost.id })
+    // Saying it helps.
+    set((s) => ({ lookAt: { ...s.lookAt, [fruit.id]: undefined }, fruits: s.fruits.map((f) => (f.id === fruit.id ? { ...f, mood: { ...f.mood, guilt: f.mood.guilt * 0.5 } } : f)) }))
+  }
+}
+
 /** One batched call writes the whole day; the engine then plays it out. Returns true if the jester won. */
 async function daytime(brain: Brain, revenge: string | null, signal: AbortSignal): Promise<boolean> {
   setPhase('talk')
@@ -546,6 +621,7 @@ async function daytime(brain: Brain, revenge: string | null, signal: AbortSignal
   sendTo((f) => spots.get(f.id) ?? f.home)
   const [script] = await Promise.all([think(() => brain.playDay(world())), wait(1200, signal)])
 
+  await moodsShow(signal)
   for (let r = 0; r < script.rounds.length; r++) await talkRound(script.rounds[r], r + 1, script.rounds.length, signal)
   return !!(await vote(script.votes, revenge, signal))
 }
@@ -592,6 +668,8 @@ async function run(signal: AbortSignal) {
     f.persona = buildPersona(f)
     f.memory = wolves.filter((w) => f.role === 'werewolf' && w.id !== f.id).map((w) => `Fellow werewolf: ${w.name}`)
   }
+  // Each fruit starts with its own hunches, a personal goal and a clean slate of feelings.
+  for (const f of fruits) Object.assign(f, startMind(f, fruits))
   set({
     screen: 'game',
     fruits,

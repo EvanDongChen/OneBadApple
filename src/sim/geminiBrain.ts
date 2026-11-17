@@ -1,3 +1,4 @@
+import { describe, describeGoal, MOODS, suspectedBy, TEMPERS } from './mind'
 import { MockBrain } from './mockBrain'
 import { quirkText } from './quirks'
 import type { Brain, Conversation, DayScript, FruitState, NightScript, Role, WorldView } from './types'
@@ -49,6 +50,7 @@ export function buildPersona(fruit: Pick<FruitState, 'name' | 'kind' | 'role' | 
     `Personality: aggression ${level(t.aggression)}, honesty ${level(t.honesty)}, talkativeness ${level(t.talkativeness)}, suspicion of others ${level(t.suspicion)}.`,
     t.quirks.length ? `Quirks: ${t.quirks.map(quirkText).join(' ')}` : '',
     t.backstory ? `Backstory, in its own words: "${t.backstory}"` : '',
+    `Way of thinking: ${TEMPERS[t.temper].label.toLowerCase()}. ${TEMPERS[t.temper].text}`,
   ]
     .filter(Boolean)
     .join(' ')
@@ -61,6 +63,8 @@ function systemPrompt(world: WorldView): string {
     'Rules: the village wins when every werewolf is dead; the werewolves win when they are at least half of the living fruits. Each night the werewolves kill one fruit, the doctor protects one, the seer inspects one. Each day the fruits talk in small private groups, then everyone votes one fruit out in public.',
     'Secrecy is the whole game. A fruit only knows the PUBLIC log, its own PRIVATE section and the conversations it was in. Never let a fruit act on, hint at or repeat anything it could not know. News travels only when a fruit chooses to pass it on, and it may be passed on wrongly or as a lie. Villagers do not know who the werewolf is and should sometimes be wrong.',
     'Each fruit\'s personality must drive both what it decides and how it talks: aggressive fruits attack and hold grudges, dishonest ones lie and invent claims, suspicious ones accuse on thin evidence, talkative ones say more. Use each quirk, and let a fruit bring up its backstory now and then when it fits. The odd fruit pun is welcome.',
+    'Each fruit has a MIND, given in its private section, and must act from it. "Suspicions" is how sure it is that each other fruit is a werewolf. "Remembers" lists specific things it witnessed: have fruits quote these back at each other by day and by name ("You voted for Pip on day 1, and Pip was innocent"). "Thinks these suspect it" is its read of the others: a fruit that expects to be voted for should look for allies before the vote. Its personal goal can outweigh its side winning. Its mood colours everything: the frightened go quiet and follow the crowd, the angry accuse harder, the grieving fixate on whoever they blame, the guilty hesitate and may apologise, the smug crow. Its way of thinking decides how it updates: the stubborn hold their first opinion, the gullible believe whatever they heard last, the contrarian doubt whatever the group agrees on. Fruits should be wrong in ways that fit them.',
+    'Werewolves must keep their lies straight: their private section lists what they have already claimed. A careful wolf repeats the same story; a careless one sometimes slips and contradicts itself, and a sharp fruit that heard both versions should notice and say so.',
     'Anything said out loud is one or two short sentences, at most 25 words.',
     'Refer to fruits by name exactly as written. Reply with JSON matching the schema and nothing else.',
     'THE CAST (permanent character sheets):',
@@ -77,11 +81,27 @@ function worldState(world: WorldView): string {
     const feelings = Object.entries(f.feelings)
       .filter(([id]) => living.some((o) => o.id === id))
       .map(([id, feel]) => `${nameOf(id)} ${feel.trust > 0 ? '+' : ''}${feel.trust}${feel.note ? ` (${feel.note})` : ''}`)
+    const wolf = f.role === 'werewolf'
+    const sure = Object.entries(f.beliefs)
+      .filter(([id]) => living.some((o) => o.id === id) && !(wolf && world.fruits.find((o) => o.id === id)?.role === 'werewolf'))
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, belief]) => `${nameOf(id)} ${Math.round(belief)}%`)
+    const threats = Object.entries(suspectedBy(f))
+      .filter(([id, n]) => n >= 30 && living.some((o) => o.id === id))
+      .map(([id]) => nameOf(id))
+    const moods = MOODS.filter((m) => f.mood[m] > 0.35).map((m) => `${m === 'smug' ? 'smugness' : m} ${Math.round(f.mood[m] * 10)}/10`)
+    const lies = f.events.filter((e) => e.kind === 'claim' && e.actor === f.id)
     return [
       `### ${f.name} (${f.role}) PRIVATE`,
       f.memory.length ? `Knows: ${f.memory.join(' | ')}` : 'Knows: nothing special.',
       f.thought ? `Current thought: ${f.thought}` : '',
       feelings.length ? `Trust in others (-5 to +5): ${feelings.join(', ')}` : '',
+      sure.length ? `${wolf ? 'How dangerous each fruit is to it' : 'Suspicions (how sure each is a werewolf)'}: ${sure.join(', ')}` : '',
+      `Personal goal: ${describeGoal(f.goal, nameOf, wolf)}`,
+      moods.length ? `Mood: ${moods.join(', ')}` : '',
+      threats.length ? `Thinks these suspect it: ${threats.join(', ')}` : '',
+      f.events.length ? `Remembers:\n${f.events.slice(-12).map((e) => describe(e, f, nameOf)).join('\n')}` : '',
+      wolf && lies.length ? `Lies it has told so far (keep them straight): ${lies.map((e) => describe(e, f, nameOf)).join(' ')}` : '',
       f.heard.length ? `Conversations it was in (oldest first):\n${f.heard.slice(-18).join('\n')}` : '',
     ]
       .filter(Boolean)
