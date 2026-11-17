@@ -655,6 +655,7 @@ async function run(signal: AbortSignal) {
     ? new GeminiBrain({
         apiKey: s.settings.apiKey,
         model: s.settings.model,
+        switchModels: s.settings.switchModels,
         requestsPerMinute: s.settings.requestsPerMinute,
         maxCalls: s.settings.maxCalls,
         signal,

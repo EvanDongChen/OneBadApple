@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { startGame } from '../sim/engine'
-import { listGeminiModels } from '../sim/geminiBrain'
+import { FREE_MODELS, listGeminiModels } from '../sim/geminiBrain'
 import { unlockAudio } from '../sim/sfx'
 import { TEMPERS } from '../sim/mind'
 import { MAX_QUIRKS, presetOf, QUIRK_PRESETS, quirkLabel, quirkText } from '../sim/quirks'
@@ -172,16 +172,39 @@ export default function SetupPanel() {
               Model
               <div className="row">
                 <select value={settings.model} onChange={(e) => setSettings({ model: e.target.value })}>
-                  {[...new Set([settings.model, ...models])].map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
+                  <optgroup label="Free models">
+                    {FREE_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {/* Anything else the key can use, once listed, plus a model picked earlier that is not on the list. */}
+                  {(() => {
+                    const others = [...new Set([settings.model, ...models])].filter((m) => !FREE_MODELS.some((f) => f.id === m))
+                    return others.length ? (
+                      <optgroup label="Other models on your key">
+                        {others.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </optgroup>
+                    ) : null
+                  })()}
                 </select>
                 <button onClick={loadModels} disabled={needsKey}>
                   List
                 </button>
               </div>
             </label>
+            <p className="muted">{FREE_MODELS.find((m) => m.id === settings.model)?.note ?? 'Not one we have tested. It may not be free, or may not reply in the format the game needs.'}</p>
             {modelStatus && <p className="muted">{modelStatus}</p>}
+            <label className="check">
+              <input type="checkbox" checked={settings.switchModels} onChange={(e) => setSettings({ switchModels: e.target.checked })} />
+              <span>
+                <b>Switch models when needed</b>
+                <small>If this one is busy or out of free requests, carry on with another free model instead of the no-AI rules. Each model has its own free allowance.</small>
+              </span>
+            </label>
             <div className="row">
               <label>
                 Calls per minute

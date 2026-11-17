@@ -7,9 +7,26 @@ const API = 'https://generativelanguage.googleapis.com/v1beta'
 const REQUEST_TIMEOUT_MS = 60000
 const MAX_ATTEMPTS = 2
 
+/**
+ * Models that worked on a free API key when tested in November 2026, best first. Google does not
+ * publish free-tier limits per model any more, but each model has its own allowance, so when
+ * one is busy or used up the game can carry on with the next.
+ */
+export const FREE_MODELS: { id: string; label: string; note: string; backup: boolean }[] = [
+  { id: 'gemini-flash-lite-latest', label: 'Gemini Flash-Lite (latest)', note: 'Recommended. Fast, and plays the fruits well.', backup: true },
+  { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', note: 'Fast. A good second choice.', backup: true },
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Newer, but slower to answer.', backup: true },
+  { id: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B', note: 'Open model, usually with a large free allowance. Can be slow or busy with a full village.', backup: true },
+  { id: 'gemma-4-31b-it', label: 'Gemma 4 31B', note: 'Larger open model. Slow.', backup: true },
+  { id: 'gemini-flash-latest', label: 'Gemini Flash (latest)', note: 'Smarter, but often busy, with a small free allowance.', backup: false },
+  { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', note: 'Smarter, but often busy, with a small free allowance.', backup: false },
+]
+
 export interface GeminiOptions {
   apiKey: string
   model: string
+  /** When the model is busy, used up or gone, carry on with the next free model. */
+  switchModels: boolean
   /** Calls are spaced out to stay under this. */
   requestsPerMinute: number
   /** After this many calls the brain falls back to the no-AI rules. */
@@ -19,6 +36,8 @@ export interface GeminiOptions {
   onCall(count: number): void
   /** Called once per distinct problem so the UI can surface it. */
   onProblem(message: string): void
+  /** Called when it switches to another model. */
+  onModel?(model: string): void
 }
 
 export async function listGeminiModels(apiKey: string): Promise<string[]> {
@@ -148,9 +167,26 @@ export class GeminiBrain implements Brain {
   private lastCallAt = 0
   private reported = new Set<string>()
   private opts: GeminiOptions
+  /** The model being used now, which changes if it has to switch. */
+  private model: string
+  /** Free models still to try if this one gives out, in order. */
+  private spares: string[]
 
   constructor(opts: GeminiOptions) {
     this.opts = opts
+    this.model = opts.model
+    this.spares = opts.switchModels ? FREE_MODELS.filter((m) => m.backup && m.id !== opts.model).map((m) => m.id) : []
+  }
+
+  /** Move on to the next free model, if there is one. Returns false when there are none left. */
+  private switchModel(why: string): boolean {
+    const next = this.spares.shift()
+    if (!next) return false
+    const name = (id: string) => FREE_MODELS.find((m) => m.id === id)?.label ?? id
+    this.opts.onProblem(`${name(this.model)} ${why}. Switching to ${name(next)}.`)
+    this.model = next
+    this.opts.onModel?.(next)
+    return true
   }
 
   private problem(message: string) {
@@ -181,7 +217,7 @@ export class GeminiBrain implements Brain {
       this.lastCallAt = Date.now()
       this.opts.onCall(++this.calls)
       try {
-        const res = await fetch(`${API}/models/${this.opts.model}:generateContent`, {
+        const res = await fetch(`${API}/models/${this.model}:generateContent`, {
           method: 'POST',
           headers: { 'x-goog-api-key': this.opts.apiKey, 'content-type': 'application/json' },
           signal: AbortSignal.any([this.opts.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
@@ -191,7 +227,19 @@ export class GeminiBrain implements Brain {
             generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 1 },
           }),
         })
+        // Out of free requests, or retired: no point waiting, go straight to another model.
+        if (res.status === 429 || res.status === 404) {
+          if (this.switchModel(res.status === 429 ? 'is out of free requests for now' : 'is no longer available')) {
+            attempt = 0
+            continue
+          }
+        }
         if (res.status === 429 || res.status >= 500) {
+          // Busy: try once more after a pause, then move on to another model.
+          if (attempt === MAX_ATTEMPTS && this.switchModel('is busy')) {
+            attempt = 0
+            continue
+          }
           if (attempt === MAX_ATTEMPTS) {
             this.problem(`Gemini is rate-limiting or unavailable (HTTP ${res.status}). Using the no-AI rules for that turn.`)
             return null
@@ -210,6 +258,11 @@ export class GeminiBrain implements Brain {
         throw new Error('empty or malformed reply')
       } catch (err) {
         if (this.opts.signal.aborted) throw err
+        // Too slow twice running: try another model rather than give up on the turn.
+        if (attempt === MAX_ATTEMPTS && this.switchModel('is too slow right now')) {
+          attempt = 0
+          continue
+        }
         if (attempt === MAX_ATTEMPTS) {
           this.problem(`Gemini request failed (${err instanceof Error ? err.message : String(err)}). Using the no-AI rules for that turn.`)
           return null
