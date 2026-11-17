@@ -11,6 +11,10 @@ const HEAD_LENGTH = 0.55
 const CLEAR = 0.85 // how far from a fruit's middle an arrow starts and stops
 const INK = '#2a1a12'
 const OUTLINE = 0.05 // how far the ink edge sticks out around the colour
+// Between these distances apart, an arrow rises from the ground to arc over the fruits' heads.
+const ARC_FAR = 3.6
+const ARC_NEAR = 2.5
+const HEAD_CLEAR = 0.72 // how far above a fruit's middle an overhead arrow starts and ends
 
 interface Edge {
   from: string
@@ -102,53 +106,72 @@ function Arrow({ edge, index }: { edge: Edge; index: number }) {
     const span = Math.hypot(dx, dz) || 1
     const ux = dx / span
     const uz = dz / span
+    // Far apart, the arrow lies on the ground between them. Close together there is no room
+    // there, so it lifts up and arcs over their heads instead, blending from one to the other.
+    const t0 = Math.max(0, Math.min(1, (ARC_FAR - span) / (ARC_FAR - ARC_NEAR)))
+    const over = t0 * t0 * (3 - 2 * t0)
+    const mix = (ground: number, air: number) => ground + (air - ground) * over
+    const ground = 0.03 + index * 0.0016
+    const clear = mix(CLEAR, 0.1)
+    const headLength = mix(HEAD_LENGTH, 0.36)
     // The curve bows out to its own right, so two fruits that suspect each other get two separate arrows.
-    const length = span - CLEAR * 2
-    const bow = Math.min(1.1, span * 0.16)
-    const sx = a.x + ux * CLEAR
-    const sz = a.z + uz * CLEAR
-    const ex = b.x - ux * CLEAR
-    const ez = b.z - uz * CLEAR
+    const bow = mix(Math.min(1.1, span * 0.16), 0.3)
+    const sx = a.x + ux * clear
+    const sz = a.z + uz * clear
+    const sy = mix(ground, a.y + HEAD_CLEAR)
+    const ex = b.x - ux * clear
+    const ez = b.z - uz * clear
+    const ey = mix(ground, b.y + HEAD_CLEAR)
     const cx = (sx + ex) / 2 + uz * bow
     const cz = (sz + ez) / 2 - ux * bow
-    const at = (t: number): [number, number] => [(1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cx + t * t * ex, (1 - t) * (1 - t) * sz + 2 * (1 - t) * t * cz + t * t * ez]
+    const cy = mix(ground, (sy + ey) / 2 + 1.0 + span * 0.3)
+    const at = (t: number): [number, number, number] => {
+      const p = (1 - t) * (1 - t)
+      const q = 2 * (1 - t) * t
+      const r = t * t
+      return [p * sx + q * cx + r * ex, p * sy + q * cy + r * ey, p * sz + q * cz + r * ez]
+    }
 
     // The tag rides on the curve, a little over half way along.
     if (tag.current) {
-      const [tx, tz] = at(0.56)
-      tag.current.position.set(tx, 0.45, tz)
+      const [tx, ty, tz] = at(0.56)
+      tag.current.position.set(tx, mix(0.45, ty + 0.18), tz)
     }
-    // No room for an arrow between two fruits standing close together: the tag alone says it.
-    const room = length > HEAD_LENGTH + 0.4
+    // Roughly how long the curve is, to leave room for the head.
+    const [mx, my, mz] = at(0.5)
+    const length = Math.hypot(mx - sx, my - sy, mz - sz) + Math.hypot(ex - mx, ey - my, ez - mz)
+    const room = length > headLength + 0.3
     meshes.current.visible = room
     if (!room) return
 
-    const neck = 1 - HEAD_LENGTH / length // where the shaft ends and the head begins
-    const y = 0.03 + index * 0.0016
+    const neck = 1 - headLength / length // where the shaft ends and the head begins
     const write = (geometry: BufferGeometry, extra: number, lift: number) => {
       const position = geometry.getAttribute('position') as BufferAttribute
       for (let i = 0; i <= SEGMENTS; i++) {
         const t = (i / SEGMENTS) * neck
-        const [px, pz] = at(t)
-        const [qx, qz] = at(Math.min(1, t + 0.01))
-        const tl = Math.hypot(qx - px, qz - pz) || 1
-        // Sideways from the direction of travel.
-        const nx = (qz - pz) / tl
-        const nz = -(qx - px) / tl
+        const [px, py, pz] = at(t)
+        const [qx, , qz] = at(Math.min(1, t + 0.01))
+        const tl = Math.hypot(qx - px, qz - pz)
+        // Sideways from the direction of travel, kept level so the ribbon faces up at the camera.
+        const nx = tl > 1e-5 ? (qz - pz) / tl : uz
+        const nz = tl > 1e-5 ? -(qx - px) / tl : -ux
         // Thin at the tail, swelling toward the head.
-        const half = (width * (0.3 + 0.7 * (i / SEGMENTS))) / 2 + extra
-        position.setXYZ(i * 2, px + nx * half, y + lift, pz + nz * half)
-        position.setXYZ(i * 2 + 1, px - nx * half, y + lift, pz - nz * half)
+        // Overhead arcs are drawn a little bolder, since they are seen from further off.
+        const half = (width * mix(1, 1.35) * (0.3 + 0.7 * (i / SEGMENTS))) / 2 + extra
+        position.setXYZ(i * 2, px + nx * half, py + lift, pz + nz * half)
+        position.setXYZ(i * 2 + 1, px - nx * half, py + lift, pz - nz * half)
       }
-      const [bx, bz] = at(neck)
-      const hl = Math.hypot(ex - bx, ez - bz) || 1
+      const [bx, by, bz] = at(neck)
+      const hl = Math.hypot(ex - bx, ey - by, ez - bz) || 1
       const hx = (ex - bx) / hl
+      const hy = (ey - by) / hl
       const hz = (ez - bz) / hl
+      const flat = Math.hypot(hx, hz) || 1
       const half = width * 1.25 + 0.1 + extra * 1.6
       const head = (SEGMENTS + 1) * 2
-      position.setXYZ(head, bx - hx * extra + hz * half, y + lift, bz - hz * extra - hx * half)
-      position.setXYZ(head + 1, ex + hx * extra * 2, y + lift, ez + hz * extra * 2)
-      position.setXYZ(head + 2, bx - hx * extra - hz * half, y + lift, bz - hz * extra + hx * half)
+      position.setXYZ(head, bx - hx * extra + (hz / flat) * half, by - hy * extra + lift, bz - hz * extra - (hx / flat) * half)
+      position.setXYZ(head + 1, ex + hx * extra * 2, ey + hy * extra * 2 + lift, ez + hz * extra * 2)
+      position.setXYZ(head + 2, bx - hx * extra - (hz / flat) * half, by - hy * extra + lift, bz - hz * extra + (hx / flat) * half)
       position.needsUpdate = true
     }
     write(ink, OUTLINE, 0)
