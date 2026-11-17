@@ -1,4 +1,5 @@
-import { useSim } from './store'
+import { Vector3 } from 'three'
+import { fruitPositions, useSim } from './store'
 import type { FruitDef, FruitKind } from './types'
 
 // Tiny synthesised sound effects; no audio files.
@@ -56,12 +57,50 @@ const VOWELS: Record<string, [number, number]> = {
 }
 const VOWEL_KEYS = Object.keys(VOWELS)
 
-/** How many fruits are speaking right now. */
-let talking = 0
+/** Where the viewer is listening from: the camera, kept up to date by the stage. */
+export const ears = { position: new Vector3(0, 12, 21), right: new Vector3(1, 0, 0) }
+
+/** One fruit's speech in progress, with its own volume and left-right position. */
+interface Voice {
+  id: string
+  out: GainNode
+  pan: StereoPannerNode
+}
+const voices = new Set<Voice>()
+let mixTimer: number | undefined
+const toSpeaker = new Vector3()
+
+/**
+ * Several conversations run at once. The one nearest the camera is heard clearly, the next
+ * nearest is a murmur, and the rest are silent. Each voice also sits to the left or right
+ * according to where its fruit is on screen. `fresh` is a voice that has not started yet,
+ * which is set straight to its level rather than faded there.
+ */
+function mix(fresh?: Voice) {
+  if (!ctx) return
+  const now = ctx.currentTime
+  const ranked = [...voices]
+    .map((voice) => {
+      const at = fruitPositions.get(voice.id)
+      return { voice, at, far: at ? at.distanceTo(ears.position) : Infinity }
+    })
+    .sort((x, y) => x.far - y.far)
+  ranked.forEach(({ voice, at }, i) => {
+    const level = i === 0 ? 1 : i === 1 ? 0.14 : 0
+    const side = at ? Math.max(-0.8, Math.min(0.8, toSpeaker.subVectors(at, ears.position).normalize().dot(ears.right) * 2)) : 0
+    if (voice === fresh) {
+      voice.out.gain.setValueAtTime(level, now)
+      voice.pan.pan.setValueAtTime(side, now)
+    } else {
+      voice.out.gain.setTargetAtTime(level, now, 0.12)
+      voice.pan.pan.setTargetAtTime(side, now, 0.12)
+    }
+  })
+}
 
 /** One spoken syllable: a buzz shaped by a vowel's two resonances, with a quick fade in and out. */
-function syllable(pitch: number, start: number, length: number, vowel: [number, number], gain: number, pan: number) {
-  if (!ctx || useSim.getState().settings.muted) return
+function syllable(out: AudioNode, pitch: number, start: number, length: number, vowel: [number, number], gain: number) {
+  if (!ctx) return
   const t = ctx.currentTime + start
   const osc = ctx.createOscillator()
   const amp = ctx.createGain()
@@ -79,9 +118,7 @@ function syllable(pitch: number, start: number, length: number, vowel: [number, 
     filter.Q.value = 5
     osc.connect(filter).connect(amp)
   }
-  const panner = ctx.createStereoPanner()
-  panner.pan.value = pan
-  amp.connect(panner).connect(ctx.destination)
+  amp.connect(out)
   osc.start(t)
   osc.stop(t + length + 0.02)
 }
@@ -93,20 +130,28 @@ function syllable(pitch: number, start: number, length: number, vowel: [number, 
  * The kind of fruit sets the pitch, talkative fruits gabble faster, and aggressive ones swing
  * further up and down. `variant` nudges the pitch so two fruits of the same kind differ.
  */
-export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number, text: string, durationMs: number) {
-  // Several conversations run at once. Only the first voice is heard clearly; anyone who
-  // starts while it is still going is a murmur in the background, and a third is silent.
-  const others = talking
-  talking++
-  window.setTimeout(() => talking--, durationMs)
-  if (others >= 2) return
-  const volume = others ? 0.22 : 1
-  // Spread the voices across the speakers so they are easier to tell apart.
-  const pan = ((variant % 5) - 2) * 0.3
+export function babble(fruit: Pick<FruitDef, 'id' | 'kind' | 'traits'>, variant: number, text: string, durationMs: number) {
+  if (!ctx || useSim.getState().settings.muted) return
+  const voice: Voice = { id: fruit.id, out: ctx.createGain(), pan: ctx.createStereoPanner() }
+  voice.out.connect(voice.pan).connect(ctx.destination)
+  voices.add(voice)
+  mix(voice)
+  // Keep re-ranking while anyone is talking, since the camera and the fruits both move.
+  mixTimer ??= window.setInterval(() => mix(), 150)
+  window.setTimeout(() => {
+    voices.delete(voice)
+    voice.pan.disconnect()
+    mix()
+    if (!voices.size && mixTimer !== undefined) {
+      window.clearInterval(mixTimer)
+      mixTimer = undefined
+    }
+  }, durationMs + 150)
+
   const base = KIND_PITCH[fruit.kind] * (1 + (((variant * 7) % 5) - 2) * 0.04)
   const letters = text.toLowerCase().slice(0, 90)
   // Finish a little before the bubble closes, however fast the game is running.
-  const gap = Math.min(0.078 - fruit.traits.talkativeness * 0.026, (durationMs / 1000) * 0.85 / Math.max(1, letters.length))
+  const gap = Math.min(0.078 - fruit.traits.talkativeness * 0.026, ((durationMs / 1000) * 0.85) / Math.max(1, letters.length))
   const swing = 0.035 + fruit.traits.aggression * 0.05
   const question = text.trim().endsWith('?')
   for (let i = 0; i < letters.length; i++) {
@@ -118,7 +163,7 @@ export function babble(fruit: Pick<FruitDef, 'kind' | 'traits'>, variant: number
     // Each letter always lands on the same note, which is what makes it sound like words.
     const lift = question && i > letters.length - 8 ? 1 + (i - letters.length + 8) * 0.03 : 1
     const pitch = base * (1 + ((code % 7) - 3) * swing) * lift
-    syllable(pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, (isVowel ? 0.3 : 0.2) * volume, pan)
+    syllable(voice.out, pitch, i * gap, gap * (isVowel ? 1.5 : 1.1), vowel, isVowel ? 0.3 : 0.2)
   }
 }
 

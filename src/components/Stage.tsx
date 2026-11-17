@@ -4,6 +4,7 @@ import { Grid } from '@react-three/drei'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { Color, DoubleSide, MathUtils, Object3D } from 'three'
 import type { AmbientLight, DirectionalLight, InstancedMesh } from 'three'
+import { ears } from '../sim/sfx'
 import { useSim } from '../sim/store'
 import { LOOKS } from './fruitLooks'
 
@@ -23,7 +24,10 @@ export default function Stage() {
   const night = useRef(0)
   const backdrop = useRef(new Color('#ffffff'))
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
+    // Voices are mixed by how close each speaker is to the camera.
+    ears.position.copy(camera.position)
+    ears.right.setFromMatrixColumn(camera.matrixWorld, 0)
     const phase = useSim.getState().phase
     night.current = MathUtils.damp(night.current, phase === 'night' ? 1 : phase === 'dawn' ? 0.4 : 0, 2, delta)
     scene.background = backdrop.current.lerpColors(DAY, NIGHT, night.current)
