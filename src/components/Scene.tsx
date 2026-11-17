@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import { useSim } from '../sim/store'
 import Director, { INTRO_FROM } from './Director'
+import Dust from './Dust'
 import Fruit from './Fruit'
 import Ghost from './Ghost'
 import Stage from './Stage'
@@ -30,6 +31,7 @@ export default function Scene() {
         </Physics>
         {ghosts && ghosts.split(',').map((id) => <Ghost key={id} id={id} />)}
         <SuspicionArrows />
+        <Dust />
       </Suspense>
       {/* The title screen turns slowly around the village. */}
       <OrbitControls makeDefault target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={55} enablePan={false} autoRotate={title} autoRotateSpeed={0.7} />

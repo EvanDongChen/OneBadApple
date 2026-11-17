@@ -490,6 +490,8 @@ async function talkRound(groups: Conversation[], round: number, total: number, s
         // Everyone in the group remembers what was said, and it shifts what they believe.
         const told = { ...line, accuses: accused ?? line.accuses, vouches: vouchedBy(line, group.members, accused) }
         for (const episode of episodesOf(told, get().day)) witness(group.members, episode)
+        // Stood up for to its face: it blushes.
+        if (told.vouches && told.vouches !== speaker.id && group.members.includes(told.vouches)) react([told.vouches], 'blush', 1800 + line.say.length * 30, signal)
         if (accused) react([accused], 'shake', 1500 + line.say.length * 40, signal)
         // Nervous fruits rattle whenever anyone near them is accused, not only when it is them.
         const nervous = group.members.filter((id) => id !== accused && id !== speaker.id && byId(id).traits.quirks.includes('nervous'))
@@ -548,7 +550,8 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
     const shooter = voters.length ? voters.reduce((a, b) => (b.traits.aggression > a.traits.aggression ? b : a)) : undefined
     if (shooter) {
       set((s) => ({ execution: { shooterId: shooter.id, targetId: out.id, firing: false }, focusId: out.id, lookAt: { ...s.lookAt, [shooter.id]: out.id } }))
-      await wait(1100, signal)
+      // Long enough for the aim to sink in, and for the director camera to swing round side-on.
+      await wait(1800, signal)
       set((s) => ({ execution: s.execution && { ...s.execution, firing: true } }))
       gunshot()
       burst('BANG!', shooter.id)
