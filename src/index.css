@@ -783,6 +783,161 @@ input[type='range']::-moz-range-thumb {
   gap: 6px;
 }
 
+/* The View menu: a button that drops a list of things to show or hide. */
+.menu {
+  position: relative;
+}
+
+.menu .count {
+  display: inline-block;
+  min-width: 17px;
+  margin-left: 6px;
+  padding: 1px 4px 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.menu-list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 262px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+button.menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 9px;
+  box-shadow: none;
+  padding: 6px 8px;
+}
+
+button.menu-item:hover:not(:disabled) {
+  background: #fff;
+}
+
+button.menu-item:active:not(:disabled) {
+  transform: none;
+}
+
+.menu-item span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.menu-item b {
+  font-weight: 400;
+  font-size: 15px;
+}
+
+.menu-item small {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* A tick box, filled in when the thing is showing. */
+.menu-item .tick {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border: 2.5px solid var(--ink);
+  border-radius: 5px;
+  background: #fff;
+}
+
+.menu-item.on .tick {
+  background:
+    linear-gradient(45deg, transparent 43%, #fff 43% 57%, transparent 57%) 2px 5px / 6px 6px no-repeat,
+    linear-gradient(-45deg, transparent 43%, #fff 43% 57%, transparent 57%) 5px 1px / 9px 10px no-repeat,
+    var(--apple);
+}
+
+/* ---------- Title card that sweeps across at each change of phase ---------- */
+
+.phase-card {
+  position: fixed;
+  z-index: 35;
+  top: 36%;
+  left: -5vw;
+  right: -5vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 0 18px;
+  pointer-events: none;
+  background: var(--paper);
+  border-block: 4px solid var(--ink);
+  box-shadow: 0 8px 0 rgb(42 26 18 / 25%);
+  transform: rotate(-2deg);
+  animation: sweep 2.3s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+.phase-card h1 {
+  font-size: clamp(44px, 8vw, 88px);
+  -webkit-text-stroke: 3px var(--ink);
+  text-shadow: 4px 6px 0 var(--ink);
+  transform: none;
+}
+
+.phase-card span {
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.phase-card.dark {
+  background: #1b1f2b;
+  color: var(--paper);
+}
+
+.phase-card.dark h1 {
+  color: var(--sun);
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-115%) rotate(-2deg);
+  }
+  22% {
+    transform: translateX(0) rotate(-2deg);
+  }
+  70% {
+    transform: translateX(2%) rotate(-2deg);
+  }
+  100% {
+    transform: translateX(115%) rotate(-2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-card {
+    animation: none;
+  }
+}
+
 /* ---------- Villager list and mind reader ---------- */
 
 .roster {

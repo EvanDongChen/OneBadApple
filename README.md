@@ -48,7 +48,7 @@ Nobody plays. You just watch it go wrong.
 | 🗣️ **Voices** | Every fruit babbles in soft musical blips that follow the rhythm of its line: the kind of fruit sets the pitch, and chatty fruits gabble faster. All the voices share one scale, so they stay in tune with each other. When several conversations run at once you hear the one nearest the camera. |
 | 📜 **Recap** | When the game ends, read back who killed whom, how every vote went, and when each fruit changed its mind about another, marked right or wrong. |
 | 🍐 **Thirteen fruits** | Apple, orange, lemon, plum, pear, lime, peach, blueberry, cherry, kiwi, banana, strawberry and watermelon, each with its own shape. Every visit starts with a random village. |
-| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, director camera on or off, and sound on or off. |
+| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too) and sound, plus a View menu for the director camera, suspicion arrows and map, thought bubbles and roles. A title card sweeps across at each change of phase. |
 
 ## 📸 Screenshots
 

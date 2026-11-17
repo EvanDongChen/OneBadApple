@@ -41,8 +41,54 @@ export default function Hud() {
   const [mindId, setMindId] = useState<string | null>(null)
   const [recapOpen, setRecapOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  const [viewOpen, setViewOpen] = useState(false)
+  const viewMenu = useRef<HTMLDivElement>(null)
+  const [card, setCard] = useState<{ key: number; title: string; sub: string; dark: boolean } | null>(null)
   const mind = fruits.find((f) => f.id === mindId)
   const dark = phase === 'night'
+
+  const views = [
+    { label: 'Director camera', hint: 'Follows the action by itself', on: director, toggle: () => useSim.setState({ director: !director }) },
+    { label: 'Suspicion arrows', hint: 'On the ground, from each fruit to who it suspects', on: arrows, toggle: () => useSim.setState({ arrows: !arrows }) },
+    { label: 'Suspicion map', hint: 'A diagram of who suspects whom', on: mapOpen, toggle: () => setMapOpen(!mapOpen) },
+    { label: 'Thought bubbles', hint: "Every fruit's private thought over its head", on: showThoughts, toggle: () => useSim.setState({ showThoughts: !showThoughts }) },
+    { label: 'Roles', hint: 'Show who is who. Spoilers!', on: revealRoles, toggle: () => useSim.setState({ revealRoles: !revealRoles }) },
+  ]
+
+  // The View menu closes when you click anywhere else or press Escape.
+  useEffect(() => {
+    if (!viewOpen) return
+    const away = (e: PointerEvent) => {
+      if (!viewMenu.current?.contains(e.target as Node)) setViewOpen(false)
+    }
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewOpen(false)
+    }
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [viewOpen])
+
+  // A title card sweeps across the screen each time the phase changes.
+  useEffect(() => {
+    const cards: Partial<Record<Phase, [string, string]>> = {
+      night: [`Night ${day}`, 'Everyone heads home'],
+      dawn: [`Day ${day}`, 'Dawn breaks'],
+      talk: ['Talking it over', `Day ${day}`],
+      vote: ['The vote', `Day ${day}`],
+    }
+    const next = cards[phase]
+    if (!next) {
+      setCard(null)
+      return
+    }
+    setCard({ key: performance.now(), title: next[0], sub: next[1], dark: phase === 'night' })
+    const timer = setTimeout(() => setCard(null), 2300)
+    return () => clearTimeout(timer)
+  }, [phase, day])
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: 'end' })
@@ -68,27 +114,39 @@ export default function Hud() {
         <div className="controls">
           <button onClick={() => useSim.setState({ paused: !paused })}>{paused ? 'Resume' : 'Pause'}</button>
           <button onClick={() => useSim.setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}>Speed {speed}x</button>
-          <button className={revealRoles ? 'on' : ''} onClick={() => useSim.setState({ revealRoles: !revealRoles })}>
-            {revealRoles ? 'Hide roles' : 'Peek at roles'}
-          </button>
-          <button className={director ? 'on' : ''} title="The camera follows the action by itself" onClick={() => useSim.setState({ director: !director })}>
-            {director ? 'Director on' : 'Director off'}
-          </button>
-          <button className={mapOpen ? 'on' : ''} title="A diagram of who suspects whom. Spoilers!" onClick={() => setMapOpen(!mapOpen)}>
-            {mapOpen ? 'Hide map' : 'Suspicion map'}
-          </button>
-          <button className={arrows ? 'on' : ''} title="Arrows on the ground from each fruit to the ones it suspects" onClick={() => useSim.setState({ arrows: !arrows })}>
-            {arrows ? 'Arrows on' : 'Arrows off'}
-          </button>
-          <button className={showThoughts ? 'on' : ''} onClick={() => useSim.setState({ showThoughts: !showThoughts })}>
-            {showThoughts ? 'Hide thoughts' : 'Show thoughts'}
-          </button>
+          {/* Everything that changes what you can see lives in one menu. */}
+          <div className="menu" ref={viewMenu}>
+            <button className={viewOpen ? 'on' : ''} aria-haspopup="menu" aria-expanded={viewOpen} onClick={() => setViewOpen(!viewOpen)}>
+              View
+              <span className="count">{views.filter((v) => v.on).length}</span>
+            </button>
+            {viewOpen && (
+              <div className="menu-list" role="menu">
+                {views.map((view) => (
+                  <button key={view.label} role="menuitemcheckbox" aria-checked={view.on} className={`menu-item${view.on ? ' on' : ''}`} onClick={view.toggle}>
+                    <i className="tick" />
+                    <span>
+                      <b>{view.label}</b>
+                      <small>{view.hint}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => useSim.getState().setSettings({ muted: !settings.muted })}>{settings.muted ? 'Sound on' : 'Sound off'}</button>
           <button className="danger" onClick={stopGame}>
             Quit
           </button>
         </div>
       </header>
+
+      {card && (
+        <div key={card.key} className={`phase-card${card.dark ? ' dark' : ''}`} aria-hidden="true">
+          <span>{card.sub}</span>
+          <h1>{card.title}</h1>
+        </div>
+      )}
 
       {mapOpen && <RelationshipMap onClose={() => setMapOpen(false)} />}
 
