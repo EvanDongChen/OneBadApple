@@ -994,6 +994,116 @@ button.roster-row.on {
   background: var(--apple);
 }
 
+/* ---------- Suspicion map ---------- */
+
+.map {
+  top: 16px;
+  left: 16px;
+  width: min(330px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 21;
+}
+
+.map svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.map .edge path {
+  fill: none;
+  stroke: #c2261a;
+  stroke-linecap: round;
+  transition:
+    stroke-width 0.6s,
+    opacity 0.6s;
+}
+
+.map .edge.calm path {
+  stroke: #1f8a5b;
+  stroke-dasharray: 4 4;
+}
+
+.map .pct {
+  font-family: var(--display);
+  font-size: 11px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  fill: var(--ink);
+  stroke: var(--paper);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+
+.map .node {
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.map .node.dim {
+  opacity: 0.55;
+}
+
+.map .node.dead {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.map .dot {
+  stroke: var(--ink);
+  stroke-width: 2.5px;
+}
+
+.map .node.on .dot {
+  stroke-width: 4.5px;
+}
+
+.map .heat {
+  fill: #e2412f;
+  transition:
+    r 0.6s,
+    opacity 0.6s;
+}
+
+.map .cross {
+  stroke: var(--ink);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+}
+
+.map .name {
+  font-family: var(--display);
+  font-size: 12px;
+  text-anchor: middle;
+  fill: var(--ink);
+}
+
+.map .tag {
+  font-family: var(--display);
+  font-size: 9px;
+  text-anchor: middle;
+  fill: #6b5a4c;
+}
+
+.map .tag.werewolf {
+  fill: #c2261a;
+}
+
+.map .tag.seer {
+  fill: var(--plum);
+}
+
+.map .tag.doctor {
+  fill: #1f8a5b;
+}
+
+.map .hint {
+  line-height: 1.4;
+  min-height: 34px;
+}
+
 /* ---------- Gossip log ---------- */
 
 .log {
@@ -1491,6 +1601,10 @@ button.roster-row.on {
 @media (max-width: 760px) {
   .roster {
     display: none;
+  }
+
+  .map {
+    top: 96px;
   }
 
   .log {

@@ -5,6 +5,7 @@ import { useSim } from '../sim/store'
 import type { Phase } from '../sim/types'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
 import Recap from './Recap'
+import RelationshipMap from './RelationshipMap'
 import RichText from './RichText'
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -38,6 +39,7 @@ export default function Hud() {
   const logEnd = useRef<HTMLDivElement>(null)
   const [mindId, setMindId] = useState<string | null>(null)
   const [recapOpen, setRecapOpen] = useState(false)
+  const [mapOpen, setMapOpen] = useState(false)
   const mind = fruits.find((f) => f.id === mindId)
   const dark = phase === 'night'
 
@@ -71,6 +73,9 @@ export default function Hud() {
           <button className={director ? 'on' : ''} title="The camera follows the action by itself" onClick={() => useSim.setState({ director: !director })}>
             {director ? 'Director on' : 'Director off'}
           </button>
+          <button className={mapOpen ? 'on' : ''} title="A diagram of who suspects whom. Spoilers!" onClick={() => setMapOpen(!mapOpen)}>
+            {mapOpen ? 'Hide map' : 'Suspicion map'}
+          </button>
           <button className={showThoughts ? 'on' : ''} onClick={() => useSim.setState({ showThoughts: !showThoughts })}>
             {showThoughts ? 'Hide thoughts' : 'Show thoughts'}
           </button>
@@ -80,6 +85,8 @@ export default function Hud() {
           </button>
         </div>
       </header>
+
+      {mapOpen && <RelationshipMap onClose={() => setMapOpen(false)} />}
 
       <aside className="panel roster">
         <h2>Villagers</h2>
