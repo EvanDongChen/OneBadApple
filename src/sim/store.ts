@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Vector3 } from 'three'
+import type { Vector3 } from 'three'
 import { BACKSTORIES } from './dialog'
 import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
@@ -126,7 +126,7 @@ function seats(fruits: FruitState[]): Record<string, [number, number]> {
 }
 
 export interface SimState {
-  screen: 'setup' | 'game'
+  screen: 'title' | 'setup' | 'game'
   roster: FruitDef[]
   fruits: FruitState[]
   phase: Phase
@@ -170,6 +170,8 @@ export interface SimState {
   paused: boolean
   speed: number
   revealRoles: boolean
+  /** Let the camera follow the action by itself. */
+  director: boolean
   /** Show every fruit's private thought floating over its head. */
   showThoughts: boolean
   calls: number
@@ -183,6 +185,8 @@ export interface SimState {
   setRules(patch: Partial<Rules>): void
   addLog(entry: LogEntry): void
   backToSetup(): void
+  /** Leave the title screen: the fruits stop wandering and take their places. */
+  enterSetup(): void
 }
 
 const initialRoster = makeRoster(6)
@@ -219,6 +223,8 @@ function setupState(roster: FruitDef[]) {
 
 export const useSim = create<SimState>((set, get) => ({
   ...setupState(initialRoster),
+  screen: 'title',
+  director: true,
   log: [],
   recap: [],
   speed: 1,
@@ -250,6 +256,7 @@ export const useSim = create<SimState>((set, get) => ({
   setRules: (patch) => get().setSettings({ rules: { ...get().settings.rules, ...patch } }),
   addLog: (entry) => set((s) => ({ log: [...s.log, entry].slice(-300) })),
   backToSetup: () => set((s) => ({ ...setupState(s.roster), revealRoles: false })),
+  enterSetup: () => set((s) => ({ screen: 'setup', targets: seats(s.fruits) })),
 }))
 
 /** How fast each fruit is moving along the ground right now. Lets fruits notice someone hurrying past. */

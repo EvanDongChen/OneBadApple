@@ -1,4 +1,3 @@
-import { Vector3 } from 'three'
 import { fruitPositions, useSim } from './store'
 import type { FruitDef, FruitKind } from './types'
 
@@ -57,7 +56,7 @@ function note(step: number) {
 }
 
 /** Where the viewer is listening from: the camera, kept up to date by the stage. */
-export const ears = { position: new Vector3(0, 12, 21), right: new Vector3(1, 0, 0) }
+export const ears = { position: { x: 0, y: 12, z: 21 }, right: { x: 1, y: 0, z: 0 } }
 
 /** One fruit's speech in progress, with its own volume and left-right position. */
 interface Voice {
@@ -67,7 +66,6 @@ interface Voice {
 }
 const voices = new Set<Voice>()
 let mixTimer: number | undefined
-const toSpeaker = new Vector3()
 
 /**
  * Several conversations run at once. The one nearest the camera is heard clearly, the next
@@ -81,12 +79,17 @@ function mix(fresh?: Voice) {
   const ranked = [...voices]
     .map((voice) => {
       const at = fruitPositions.get(voice.id)
-      return { voice, at, far: at ? at.distanceTo(ears.position) : Infinity }
+      return { voice, at, far: at ? Math.hypot(at.x - ears.position.x, at.y - ears.position.y, at.z - ears.position.z) : Infinity }
     })
     .sort((x, y) => x.far - y.far)
   ranked.forEach(({ voice, at }, i) => {
     const level = i === 0 ? 1 : i === 1 ? 0.14 : 0
-    const side = at ? Math.max(-0.8, Math.min(0.8, toSpeaker.subVectors(at, ears.position).normalize().dot(ears.right) * 2)) : 0
+    // How far to the viewer's left or right the speaker is, from -1 to 1.
+    const dx = at ? at.x - ears.position.x : 0
+    const dy = at ? at.y - ears.position.y : 0
+    const dz = at ? at.z - ears.position.z : 0
+    const across = (dx * ears.right.x + dy * ears.right.y + dz * ears.right.z) / (Math.hypot(dx, dy, dz) || 1)
+    const side = Math.max(-0.8, Math.min(0.8, across * 2))
     if (voice === fresh) {
       voice.out.gain.setValueAtTime(level, now)
       voice.pan.pan.setValueAtTime(side, now)

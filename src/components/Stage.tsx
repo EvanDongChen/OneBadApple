@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Grid, Html } from '@react-three/drei'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
-import { Color, DoubleSide, MathUtils, Object3D } from 'three'
+import { Color, DoubleSide, MathUtils, Object3D, Vector3 } from 'three'
 import type { AmbientLight, DirectionalLight, InstancedMesh } from 'three'
 import { ears } from '../sim/sfx'
 import { useSim } from '../sim/store'
@@ -25,11 +25,13 @@ export default function Stage() {
   const ambient = useRef<AmbientLight>(null)
   const night = useRef(0)
   const backdrop = useRef(new Color('#ffffff'))
+  const cameraRight = useRef(new Vector3())
 
   useFrame(({ camera }, delta) => {
     // Voices are mixed by how close each speaker is to the camera.
-    ears.position.copy(camera.position)
-    ears.right.setFromMatrixColumn(camera.matrixWorld, 0)
+    const right = cameraRight.current.setFromMatrixColumn(camera.matrixWorld, 0)
+    ears.position = { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+    ears.right = { x: right.x, y: right.y, z: right.z }
     const phase = useSim.getState().phase
     night.current = MathUtils.damp(night.current, phase === 'night' ? 1 : phase === 'dawn' ? 0.4 : 0, 2, delta)
     scene.background = backdrop.current.lerpColors(DAY, NIGHT, night.current)
@@ -87,7 +89,7 @@ export default function Stage() {
             return (
               <mesh key={n} position={[Math.cos(angle) * reach, Math.sin(angle) * reach, 0]} scale={n ? [1, 0.75, 1] : [1.25, 1, 1]}>
                 <circleGeometry args={[n ? splat.size * (0.07 + (n % 3) * 0.035) : splat.size * 0.42, 18]} />
-                <meshBasicMaterial color={LOOKS[splat.kind].flesh} transparent opacity={0.85} />
+                <meshBasicMaterial color={LOOKS[splat.kind].color} transparent opacity={0.6} />
               </mesh>
             )
           })}
