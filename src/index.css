@@ -265,13 +265,7 @@ label {
 /* ---------- Title screen ---------- */
 
 .loading {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-family: var(--display);
-  font-size: 22px;
-  background: #fff;
+  display: none;
 }
 
 .title {
@@ -285,12 +279,95 @@ label {
   justify-content: space-between;
   padding: 5vh 16px 7vh;
   text-align: center;
+  --descent: 2.6s cubic-bezier(0.65, 0, 0.3, 1);
 }
 
+/* The sky the page opens on. It slides up and away as the view comes down to the village. */
+.sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(#3f9fee 0%, #8fd0ff 55%, #e8f6ff 88%, #fff 100%);
+  transition: transform var(--descent);
+}
+
+.title.down .sky {
+  transform: translateY(-104%);
+}
+
+.cloud {
+  position: absolute;
+  width: 220px;
+  height: 64px;
+  border-radius: 999px;
+  background: #fff;
+  opacity: 0.9;
+  animation: drift 26s linear infinite alternate;
+}
+
+.cloud::before,
+.cloud::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.cloud::before {
+  width: 96px;
+  height: 96px;
+  left: 34px;
+  top: -44px;
+}
+
+.cloud::after {
+  width: 70px;
+  height: 70px;
+  left: 112px;
+  top: -28px;
+}
+
+.cloud.a {
+  left: 8%;
+  top: 22%;
+}
+
+.cloud.b {
+  right: 6%;
+  top: 46%;
+  scale: 0.75;
+  animation-duration: 34s;
+  animation-direction: alternate-reverse;
+}
+
+.cloud.c {
+  left: 30%;
+  top: 72%;
+  scale: 1.25;
+  animation-duration: 40s;
+}
+
+@keyframes drift {
+  from {
+    translate: -40px 0;
+  }
+  to {
+    translate: 60px 0;
+  }
+}
+
+/* The logo starts in the middle of the sky and settles at the top of the page. */
 .title-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 18px;
+  transform: translateY(calc(50vh - 50% - 5vh)) scale(1.3);
+  transition: transform var(--descent);
+}
+
+.title.down .title-card {
+  transform: none;
 }
 
 .title-card img {
@@ -298,6 +375,7 @@ label {
   height: auto;
   transform: rotate(-8deg);
   filter: drop-shadow(0 6px 0 var(--ink));
+  view-transition-name: logo;
 }
 
 .title-card h1 {
@@ -306,9 +384,12 @@ label {
   text-align: left;
   -webkit-text-stroke: 3px var(--ink);
   text-shadow: 4px 6px 0 var(--ink);
+  view-transition-name: wordmark;
 }
 
+/* The card with the button rises into place once the village is in view. */
 .title-foot {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -318,6 +399,17 @@ label {
   border-radius: 16px;
   box-shadow: 0 6px 0 var(--ink);
   padding: 16px 26px;
+  opacity: 0;
+  transform: translateY(40px);
+  transition:
+    opacity 0.5s 2s,
+    transform 0.6s 2s cubic-bezier(0.3, 1.4, 0.5, 1);
+  view-transition-name: panel;
+}
+
+.title.down .title-foot {
+  opacity: 1;
+  transform: none;
   pointer-events: auto;
 }
 
@@ -330,9 +422,41 @@ label {
   padding: 12px 30px;
 }
 
+/*
+ * Going in: the card in the middle becomes the side panel, and the logo and title fly to its
+ * heading. The browser draws the in-between frames; these only set the pace.
+ */
+::view-transition-group(panel),
+::view-transition-group(logo),
+::view-transition-group(wordmark) {
+  animation-duration: 0.6s;
+  animation-timing-function: cubic-bezier(0.5, 0, 0.2, 1);
+}
+
+::view-transition-old(panel),
+::view-transition-new(panel) {
+  height: 100%;
+  object-fit: fill;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sky,
+  .title-card,
+  .title-foot {
+    transition: none;
+  }
+
+  .cloud {
+    animation: none;
+  }
+}
+
 /* ---------- Setup screen ---------- */
 
+/* Shares a name with the card on the title screen, so one turns into the other. */
 .setup {
+  view-transition-name: panel;
+  animation: panel-in 0.45s cubic-bezier(0.3, 1.2, 0.5, 1);
   top: 16px;
   right: 16px;
   bottom: 22px;
@@ -349,7 +473,25 @@ label {
   gap: 10px;
 }
 
+/* Browsers that cannot morph the card into the panel slide the panel in instead. */
+@keyframes panel-in {
+  from {
+    transform: translateX(110%);
+  }
+}
+
+@supports (view-transition-name: panel) {
+  .setup {
+    animation: none;
+  }
+}
+
+.brand h1 {
+  view-transition-name: wordmark;
+}
+
 .brand img {
+  view-transition-name: logo;
   width: 76px;
   height: 76px;
   flex: none;

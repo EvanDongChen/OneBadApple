@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import { useSim } from '../sim/store'
-import Director from './Director'
+import Director, { INTRO_FROM } from './Director'
 import Fruit from './Fruit'
 import Ghost from './Ghost'
 import Stage from './Stage'
@@ -19,7 +19,7 @@ export default function Scene() {
 
   return (
     // dpr is capped so high-density screens don't render four times the pixels.
-    <Canvas shadows dpr={[1, 1.5]} camera={{ position: [0, 12, 21], fov: 42, near: 0.5, far: 300 }}>
+    <Canvas shadows dpr={[1, 1.5]} camera={{ position: INTRO_FROM, fov: 42, near: 0.5, far: 300 }}>
       <Suspense fallback={null}>
         <Physics gravity={[0, -20, 0]}>
           <Stage />

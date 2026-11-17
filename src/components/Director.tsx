@@ -1,10 +1,14 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { MathUtils, Vector3 } from 'three'
 import { fruitPositions, useSim } from '../sim/store'
 
 const WIDE = 24 // camera distance for the whole stage
 const HOME = new Vector3(0, 1, 0)
+/** The opening: the camera starts high up, looking down from the sky, and comes down to here. */
+export const INTRO_FROM: [number, number, number] = [0, 46, 30]
+const INTRO_TO = new Vector3(0, 12, 21)
+const INTRO_MS = 2600
 const SAME_GROUP = 3.5 // speakers this close to the current conversation are part of it
 const MOVE_ON_MS = 2500 // how long a conversation must be silent before the camera leaves it
 
@@ -23,9 +27,24 @@ export default function Director() {
   const anchor = useMemo(() => new Vector3(), [])
   const shot = useRef({ subject: null as string | null, since: 0, wasGame: false, returning: false })
 
+  // The scene is up: the title screen can start coming down out of the sky.
+  useEffect(() => {
+    useSim.setState({ sceneReady: true })
+  }, [])
+
   useFrame((_, delta) => {
     if (!controls) return
     const sim = useSim.getState()
+    // The opening descent, in step with the sky sliding away on the title screen.
+    if (sim.screen === 'title') {
+      const t = sim.introAt === null ? 0 : Math.min(1, (performance.now() - sim.introAt) / INTRO_MS)
+      if (t < 1) {
+        const eased = t * t * (3 - 2 * t)
+        camera.position.set(INTRO_FROM[0], INTRO_FROM[1], INTRO_FROM[2]).lerp(INTRO_TO, eased)
+        controls.update()
+        return
+      }
+    }
     const s = shot.current
     const inGame = sim.screen === 'game'
     // Leaving a game: ease back to the wide view once, then leave the camera to the viewer.

@@ -177,6 +177,10 @@ export interface SimState {
   paused: boolean
   speed: number
   revealRoles: boolean
+  /** The 3D scene has loaded and is drawing. */
+  sceneReady: boolean
+  /** When the opening's descent out of the sky began, or null if it has not yet. */
+  introAt: number | null
   /** Let the camera follow the action by itself. */
   director: boolean
   /** Show every fruit's private thought floating over its head. */
@@ -231,6 +235,8 @@ function setupState(roster: FruitDef[]) {
 export const useSim = create<SimState>((set, get) => ({
   ...setupState(initialRoster),
   screen: 'title',
+  sceneReady: false,
+  introAt: null,
   director: true,
   log: [],
   recap: [],
