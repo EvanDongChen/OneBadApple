@@ -207,6 +207,11 @@ export default function SetupPanel() {
         )}
       </section>
 
+      {/* Near the top, so the game can be started without scrolling past every villager. */}
+      <button className="primary" onClick={start} disabled={needsKey}>
+        {needsKey ? 'Paste a Gemini key first' : 'Wake the village'}
+      </button>
+
       <section>
         <h2>House rules</h2>
         <div className="row">
@@ -385,10 +390,6 @@ export default function SetupPanel() {
           )
         })}
       </section>
-
-      <button className="primary" onClick={start} disabled={needsKey}>
-        {needsKey ? 'Paste a Gemini key first' : 'Wake the village'}
-      </button>
     </aside>
   )
 }

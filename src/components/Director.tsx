@@ -11,6 +11,7 @@ const INTRO_TO = new Vector3(0, 12, 21)
 const INTRO_MS = 2600
 const SAME_GROUP = 3.5 // speakers this close to the current conversation are part of it
 const MOVE_ON_MS = 2500 // how long a conversation must be silent before the camera leaves it
+const SIDE_ON_PITCH = 0.32 // how far above the ground, in radians, the camera looks from for the shooting
 
 /**
  * The director: while it is switched on, the camera goes to wherever the story is.
@@ -25,6 +26,7 @@ export default function Director() {
   const want = useMemo(() => new Vector3(), [])
   const offset = useMemo(() => new Vector3(), [])
   const anchor = useMemo(() => new Vector3(), [])
+  const angle = useMemo(() => new Vector3(), [])
   const shot = useRef({ subject: null as string | null, since: 0, wasGame: false, returning: false })
 
   // The scene is up: the title screen can start coming down out of the sky.
@@ -56,17 +58,26 @@ export default function Director() {
 
     let distance = WIDE
     want.copy(HOME)
+    // Which way the camera looks from, when a shot needs a particular angle. Zero means keep the current one.
+    angle.set(0, 0, 0)
     const at = (id: string | null | undefined) => (id ? fruitPositions.get(id) : undefined)
     const now = performance.now()
 
     if (inGame && sim.director) {
       const speakers = Object.keys(sim.speech).filter((id) => sim.speech[id])
       if (sim.execution) {
-        // The shooting: frame the gun and the condemned fruit together.
+        // The shooting: swing round to look at the pair side-on, so the shooter is at one edge
+        // of the picture and the condemned fruit at the other, with the gun pointing across.
         const a = at(sim.execution.shooterId)
         const b = at(sim.execution.targetId)
-        if (a && b) want.addVectors(a, b).multiplyScalar(0.5)
-        distance = 9
+        if (a && b) {
+          want.addVectors(a, b).multiplyScalar(0.5)
+          const across = Math.hypot(b.x - a.x, b.z - a.z) || 1
+          // Of the two sides of the line between them, take the one the camera is already nearer.
+          const side = Math.sign((camera.position.x - want.x) * -(b.z - a.z) + (camera.position.z - want.z) * (b.x - a.x)) || 1
+          angle.set((-(b.z - a.z) / across) * side * Math.cos(SIDE_ON_PITCH), Math.sin(SIDE_ON_PITCH), ((b.x - a.x) / across) * side * Math.cos(SIDE_ON_PITCH))
+          distance = Math.max(6.5, across * 1.15 + 2.5)
+        } else distance = 9
       } else if (sim.attack) {
         // Night: stay with the wolf, then close in as it reaches its victim.
         const wolf = at(sim.attack.attackerId)
@@ -80,6 +91,18 @@ export default function Director() {
         }
       } else if (sim.party) {
         distance = 17
+      } else if (sim.phase === 'talk') {
+        // The groups all talk at once, so the camera pulls back just far enough to take in every
+        // group, rather than picking one. It holds this framing through the pauses between lines.
+        const living = sim.fruits.filter((f) => f.alive).map((f) => at(f.id)).filter((p): p is Vector3 => !!p)
+        if (living.length) {
+          want.set(0, 0, 0)
+          living.forEach((p) => want.add(p))
+          want.divideScalar(living.length)
+          const reach = Math.max(...living.map((p) => Math.hypot(p.x - want.x, p.z - want.z))) + 1.6
+          distance = MathUtils.clamp(reach / 0.42, 9, WIDE)
+        }
+        s.subject = null
       } else {
         // Several groups talk at once. The camera picks one conversation and stays with it:
         // `anchor` is the spot where that conversation is happening. In the pause between two
@@ -124,7 +147,10 @@ export default function Director() {
       MathUtils.damp(controls.target.y, want.y, 2.6, delta),
       MathUtils.damp(controls.target.z, want.z, 2.6, delta),
     )
-    camera.position.copy(controls.target).addScaledVector(offset.normalize(), length)
+    offset.normalize()
+    // Swing round toward the angle the shot wants, if it wants one.
+    if (angle.lengthSq() > 0) offset.lerp(angle, 1 - Math.exp(-2.4 * delta)).normalize()
+    camera.position.copy(controls.target).addScaledVector(offset, length)
     controls.update()
     // Dev builds expose what the camera is looking at, so its behaviour can be measured.
     if (import.meta.env.DEV) Object.assign(window, { __cameraTarget: controls.target })

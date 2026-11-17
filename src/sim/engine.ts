@@ -550,7 +550,8 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
     const shooter = voters.length ? voters.reduce((a, b) => (b.traits.aggression > a.traits.aggression ? b : a)) : undefined
     if (shooter) {
       set((s) => ({ execution: { shooterId: shooter.id, targetId: out.id, firing: false }, focusId: out.id, lookAt: { ...s.lookAt, [shooter.id]: out.id } }))
-      await wait(1100, signal)
+      // Long enough for the aim to sink in, and for the director camera to swing round side-on.
+      await wait(1800, signal)
       set((s) => ({ execution: s.execution && { ...s.execution, firing: true } }))
       gunshot()
       burst('BANG!', shooter.id)
