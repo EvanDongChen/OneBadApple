@@ -21,6 +21,30 @@ export type Phase = 'setup' | 'night' | 'dawn' | 'talk' | 'vote' | 'over'
 
 export type Winner = 'village' | 'werewolves' | 'jester'
 
+/** How a fruit changes its mind. */
+export type Temper = 'steady' | 'stubborn' | 'gullible' | 'contrarian'
+
+/** Feelings that build up from events and fade overnight, each 0..1. */
+export interface Mood {
+  fear: number
+  anger: number
+  grief: number
+  guilt: number
+  smug: number
+}
+
+/** Something personal a fruit wants, besides its side winning. */
+export type Goal = { kind: 'truth' } | { kind: 'survive' } | { kind: 'protect'; target: string } | { kind: 'revenge'; target: string }
+
+/** One specific thing a fruit witnessed and remembers. Fruits are referred to by id. */
+export type Episode =
+  | { kind: 'accuse' | 'vouch' | 'vote'; day: number; actor: string; target: string }
+  /** `actor` said that on night `night` it saw `saw` out and about, or (null) that it slept and saw nothing. */
+  | { kind: 'claim'; day: number; actor: string; night: number; saw: string | null }
+  /** This fruit noticed `actor` telling two different stories about the same night. */
+  | { kind: 'caught'; day: number; actor: string }
+  | { kind: 'death'; day: number; target: string; role: Role; by: 'wolf' | 'vote' | 'hunter' }
+
 /** Personality sliders, each 0..1, plus up to three quirks. */
 export interface Traits {
   aggression: number
@@ -31,6 +55,7 @@ export interface Traits {
   quirks: string[]
   /** One line of history, in the fruit's own words, which it brings up in conversation. */
   backstory: string
+  temper: Temper
 }
 
 export const TRAIT_KEYS = ['aggression', 'honesty', 'talkativeness', 'suspicion'] as const
@@ -82,6 +107,12 @@ export interface FruitState extends FruitDef {
   thought: string
   /** How it feels about each other fruit, keyed by their id. Rewritten every night. */
   feelings: Record<string, Feeling>
+  /** Specific things it has witnessed, oldest first. */
+  events: Episode[]
+  /** How sure it is, 0 to 100, that each other living fruit is a werewolf. 0 and 100 are knowledge. */
+  beliefs: Record<string, number>
+  mood: Mood
+  goal: Goal
 }
 
 export interface LogEntry {
@@ -115,6 +146,8 @@ export interface NightScript {
   revenge: string | null
   /** With two or more werewolves: what they whisper to each other before they strike. */
   wolfChat?: { id: string; say: string }[]
+  /** True when `minds` was worked out from the fruits' own beliefs, so the engine need not copy trust back into them. */
+  fromBeliefs?: boolean
   /** Each living fruit's updated inner state. */
   minds: { id: string; thought: string; feelings: { about: string; trust: number; note: string }[] }[]
 }
@@ -122,8 +155,11 @@ export interface NightScript {
 /** A few fruits talking among themselves. Only the members hear it. */
 export interface Conversation {
   members: string[]
-  /** `accuses` is the id of the fruit the line points the finger at, when the brain knows it. */
-  lines: { id: string; say: string; accuses?: string }[]
+  /**
+   * What a line does, when the brain knows: `accuses` and `vouches` are the id of the fruit it
+   * points the finger at or stands up for; `claim` is a statement about a night ("I saw Pip out").
+   */
+  lines: { id: string; say: string; accuses?: string; vouches?: string; claim?: { night: number; saw: string | null } }[]
 }
 
 /** A short burst of body language: a gasp, a nervous shake, a cheer, a sulk or a puzzled look. */
@@ -143,8 +179,8 @@ export type RecapEvent =
 export interface DayScript {
   /** Each round splits the living fruits into small groups that talk at the same time. */
   rounds: Conversation[][]
-  /** One vote per living fruit. `lastWords` is what it cries out if it is the one voted out. */
-  votes: { id: string; target: string; reason: string; lastWords?: string }[]
+  /** One vote per living fruit. `lastWords` is what it cries out if it is the one voted out; `claim` is a statement about a night made in its reason. */
+  votes: { id: string; target: string; reason: string; lastWords?: string; claim?: { night: number; saw: string | null } }[]
 }
 
 /**

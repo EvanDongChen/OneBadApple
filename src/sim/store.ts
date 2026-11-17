@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Vector3 } from 'three'
 import { BACKSTORIES } from './dialog'
+import { emptyMood } from './mind'
 import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
 import type { FruitDef, FruitKind, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
@@ -73,6 +74,8 @@ function randomTraits(): Traits {
     suspicion: r(),
     quirks: presets.slice(0, Math.random() < 0.3 ? 2 : 1).map((p) => p.id),
     backstory: BACKSTORIES[Math.floor(Math.random() * BACKSTORIES.length)],
+    // Most fruits are level-headed; the rest are split between the three awkward kinds.
+    temper: Math.random() < 0.4 ? 'steady' : pick(['stubborn', 'gullible', 'contrarian'] as const),
   }
 }
 
@@ -118,6 +121,10 @@ export function layout(roster: FruitDef[]): FruitState[] {
     heard: [],
     thought: '',
     feelings: {},
+    events: [],
+    beliefs: {},
+    mood: emptyMood(),
+    goal: { kind: 'truth' },
   }))
 }
 
@@ -258,6 +265,9 @@ export const useSim = create<SimState>((set, get) => ({
   backToSetup: () => set((s) => ({ ...setupState(s.roster), revealRoles: false })),
   enterSetup: () => set((s) => ({ screen: 'setup', targets: seats(s.fruits) })),
 }))
+
+/** Where each ghost is floating, so the living can turn to face one. */
+export const ghostPositions = new Map<string, Vector3>()
 
 /** How fast each fruit is moving along the ground right now. Lets fruits notice someone hurrying past. */
 export const fruitSpeeds = new Map<string, number>()
