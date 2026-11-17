@@ -369,3 +369,91 @@ export const HUNTER_SHOT = [
   "I had {x} marked from the start.",
   'See you in the compost, {x}.',
 ]
+
+/** Last words of an innocent fruit being voted out: pleading. */
+export const LAST_PLEA = [
+  'Wait. Please. You are making a mistake.',
+  'It was not me. You will see in the morning.',
+  'I am just a fruit. I never hurt anyone.',
+  'Look after each other. The wolf is still here.',
+  'I forgive you. Mostly.',
+  'Somebody check my room. There is no knife. There is no knife!',
+  'Oh no. Oh no, no, no.',
+  'Remember I said it was not me.',
+]
+
+/** Last words of an innocent fruit being voted out: furious. */
+export const LAST_CURSE = [
+  'You fools. You absolute pips.',
+  'I hope the wolf eats every last one of you.',
+  'Enjoy tonight. One of you will not see the morning.',
+  'Wrong fruit. Again. Well done, everyone.',
+  'I will haunt this village. I will haunt it so hard.',
+  'May you all go soft and brown.',
+  'When I am proved right, I want an apology on my grave.',
+  'Rot. All of you. Rot.',
+]
+
+/** Last words of a werewolf that has been caught. */
+export const LAST_WOLF = [
+  'Fine. It was me. And it was delicious.',
+  'Took you long enough.',
+  'You got one of us. Sleep well.',
+  'I regret nothing. Especially the pear.',
+  'Clever little fruits. I almost had you.',
+  'Ha. You only caught me because I got bored.',
+  'It was me the whole time. Did you like the knife?',
+  'I would do it again. Slowly.',
+]
+
+/** Last words of the jester, which wanted this. */
+export const LAST_JESTER = [
+  'Yes. YES. Thank you. Thank you all.',
+  'You fell for it. Every one of you.',
+  'This is the best day of my life.',
+  'I could not have done it without your terrible judgement.',
+]
+
+/** One werewolf suggests a victim, {x}, to the pack. */
+export const WOLF_PROPOSE = [
+  'I say we take {x} tonight.',
+  '{x}. It has to be {x}.',
+  'I have been watching {x}. Too clever by half.',
+  '{x} looks at me funny. Let us fix that.',
+  'What about {x}? Nobody would miss them.',
+  'My knife says {x}.',
+]
+
+/** Another werewolf disagrees and wants {x} instead. */
+export const WOLF_COUNTER = [
+  'No. {x} is the dangerous one.',
+  'Forget that. {x} is on to us.',
+  'Too obvious. {x} is the better kill.',
+  'You are thinking with your stomach. It should be {x}.',
+  'Leave them. {x} keeps saying my name.',
+  'I would sooner have {x}.',
+]
+
+/** A werewolf agrees with the victim, {x}. */
+export const WOLF_AGREE = [
+  'Agreed. {x} it is.',
+  'I was going to say {x} myself.',
+  'Good. {x} has had it coming.',
+  'Yes. {x}. Quietly.',
+]
+
+/** A werewolf gives way: the pack will go for {x}. */
+export const WOLF_GIVE_IN = [
+  'Fine. {x}. But tomorrow night is my pick.',
+  'Have it your way. {x}.',
+  'All right, all right. {x}.',
+  'If it goes wrong, {x} was your idea.',
+]
+
+/** The pack sets off for {x}. */
+export const WOLF_SETTLE = [
+  'Then it is settled. {x} does not see the morning.',
+  'Knives out. {x} first.',
+  'Go on, then. Make it clean.',
+  'Back before dawn, and not a word.',
+]

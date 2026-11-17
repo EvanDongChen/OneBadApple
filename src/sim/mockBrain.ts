@@ -255,17 +255,45 @@ export class MockBrain implements Brain {
     const options = (list: FruitState[]) => list.map((f) => ({ id: f.id, name: f.name }))
     const view = (f: FruitState) => this.view(world, f)
 
-    const wolf = living.find((f) => f.role === 'werewolf')!
+    // Every wolf has its own idea of who should go. The most aggressive one gets its way.
+    const wolves = living.filter((f) => f.role === 'werewolf')
+    const prey = options(living.filter((f) => f.role !== 'werewolf'))
+    const picks = wolves.map((w) => this.nightAction(view(w), prey))
+    const lead = wolves.indexOf(best(wolves, (w) => w.traits.aggression))
     const doctor = living.find((f) => f.role === 'doctor')
     const seer = living.find((f) => f.role === 'seer')
     const hunter = living.find((f) => f.role === 'hunter')
     return {
-      kill: this.nightAction(view(wolf), options(living.filter((f) => f.role !== 'werewolf'))),
+      kill: picks[lead],
+      wolfChat: wolves.length > 1 ? this.wolfChat(wolves, picks, lead, prey) : undefined,
       protect: doctor ? this.nightAction(view(doctor), options(living)) : null,
       inspect: seer ? this.nightAction(view(seer), options(living.filter((f) => f.id !== seer.id))) : null,
       revenge: hunter ? this.topSuspect(view(hunter)).id : null,
       minds: living.map((f) => this.mind(view(f))),
     }
+  }
+
+  /** The pack's whispered argument over the victim. It always ends on the lead wolf's choice. */
+  private wolfChat(wolves: FruitState[], picks: string[], lead: number, prey: Other[]): NightScript['wolfChat'] {
+    const named = (id: string) => prey.find((p) => p.id === id)
+    const other = lead === 0 ? 1 : 0
+    const target = named(picks[lead])
+    const lines = [{ id: wolves[other].id, say: this.line(D.WOLF_PROPOSE, named(picks[other])) }]
+    if (picks[other] === picks[lead]) {
+      lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_AGREE, target) })
+    } else {
+      lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_COUNTER, target) })
+      lines.push({ id: wolves[other].id, say: this.line(D.WOLF_GIVE_IN, target) })
+    }
+    lines.push({ id: wolves[lead].id, say: this.line(D.WOLF_SETTLE, target) })
+    return lines
+  }
+
+  /** What a fruit cries out if it is the one voted out. */
+  private lastCry(fruit: FruitState): string {
+    if (fruit.role === 'werewolf') return this.line(D.LAST_WOLF)
+    if (fruit.role === 'jester') return this.line(D.LAST_JESTER)
+    return this.line(Math.random() < fruit.traits.aggression ? D.LAST_CURSE : D.LAST_PLEA)
   }
 
   /** Split the living into pairs (one trio if the count is odd), each fruit seeking out who it wants to talk to. */
@@ -330,7 +358,7 @@ export class MockBrain implements Brain {
     const cast: string[] = []
     for (const f of living) {
       const choice = this.vote(this.view(world, f, [...(extra.get(f.id) ?? []), ...cast]))
-      votes.push({ id: f.id, ...choice })
+      votes.push({ id: f.id, ...choice, lastWords: this.lastCry(f) })
       // Votes are public, so later voters can follow the crowd.
       cast.push(`${f.name}: I vote ${nameOf(choice.target)}.`)
     }
