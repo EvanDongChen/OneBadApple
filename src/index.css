@@ -880,23 +880,19 @@ button.menu-item:active:not(:disabled) {
   position: fixed;
   z-index: 35;
   top: 36%;
-  left: -5vw;
-  right: -5vw;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 14px 0 18px;
+  gap: 4px;
   pointer-events: none;
-  background: var(--paper);
-  border-block: 4px solid var(--ink);
-  box-shadow: 0 8px 0 rgb(42 26 18 / 25%);
-  transform: rotate(-2deg);
   animation: sweep 2.3s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
 }
 
+/* Lettering only, no band behind it: the ink edge and hard shadow keep it readable over anything. */
 .phase-card h1 {
-  font-size: clamp(44px, 8vw, 88px);
+  font-size: clamp(48px, 9vw, 104px);
   -webkit-text-stroke: 3px var(--ink);
   text-shadow: 4px 6px 0 var(--ink);
   transform: none;
@@ -904,13 +900,11 @@ button.menu-item:active:not(:disabled) {
 
 .phase-card span {
   font-family: var(--display);
-  font-size: 18px;
+  font-size: clamp(18px, 2.4vw, 26px);
   letter-spacing: 0.04em;
-}
-
-.phase-card.dark {
-  background: #1b1f2b;
   color: var(--paper);
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
 }
 
 .phase-card.dark h1 {
