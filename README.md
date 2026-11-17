@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🍎 One Bad Apple
+<img src="public/logo.svg" alt="" width="120">
+
+# One Bad Apple
 
 **A village of little fruits with legs plays Werewolf while you watch. One of them is rotten.**
 
@@ -27,7 +29,7 @@ Nobody plays. You just watch it go wrong.
 | | |
 |---|---|
 | 🧠 **Two brains** | **Gemini AI** decides everything each fruit does and says. **No AI** runs on built-in personality rules and about 280 stock lines, with no key and no cost. |
-| 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and a free-text quirk like *"speaks like a tired old sailor"*. |
+| 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and up to three quirks. Drag quirks like *Dramatic*, *Sassy* or *Pirate* onto a villager, or write your own. |
 | 🐺 **Roles** | Werewolves and villagers, plus an optional seer, doctor, hunter and jester. You choose how many wolves and which roles are in play. |
 | 🤫 **Private conversations** | Fruits pair off and talk at the same time. Only the fruits in a conversation hear it, so rumours spread by word of mouth and get passed on wrongly. |
 | 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
@@ -174,6 +176,7 @@ src/
 │   ├── geminiBrain.ts      builds prompts, calls Gemini, repairs anything illegal in the reply
 │   ├── mockBrain.ts        the No AI brain: personality-driven decisions
 │   ├── dialog.ts           stock lines for the No AI brain
+│   ├── quirks.ts           the ready-made personality quirks
 │   ├── store.ts            shared game state and saved settings
 │   └── types.ts            shared shapes, including the Brain interface
 └── components/             what you see
