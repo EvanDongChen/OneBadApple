@@ -19,6 +19,8 @@ export interface Settings {
   brain: 'test' | 'gemini'
   apiKey: string
   model: string
+  /** Carry on with another free model when the chosen one is busy or used up. */
+  switchModels: boolean
   requestsPerMinute: number
   maxCalls: number
   muted: boolean
@@ -36,6 +38,7 @@ function loadSettings(): Settings {
     brain: devKey ? 'gemini' : 'test',
     apiKey: devKey,
     model: 'gemini-flash-lite-latest',
+    switchModels: true,
     requestsPerMinute: 15,
     maxCalls: 80,
     muted: false,

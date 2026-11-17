@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { hasReason } from '../sim/mind'
 import { useSim } from '../sim/store'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
 import RichText from './RichText'
@@ -46,7 +47,8 @@ export default function RelationshipMap({ onClose }: { onClose(): void }) {
   const edges: Edge[] = []
   for (const a of living) {
     // Packmates know each other, which is knowledge rather than a suspicion, and would give the wolves away.
-    const others = living.filter((b) => b.id !== a.id && b.id in a.beliefs && !(a.role === 'werewolf' && b.role === 'werewolf'))
+    // Only once it has a reason: a starting hunch is not drawn.
+    const others = living.filter((b) => b.id !== a.id && b.id in a.beliefs && !(a.role === 'werewolf' && b.role === 'werewolf') && hasReason(a, b.id))
     const most = others.reduce<string | null>((best, b) => (best === null || a.beliefs[b.id] > a.beliefs[best] ? b.id : best), null)
     for (const b of others) edges.push({ from: a.id, to: b.id, belief: Math.round(a.beliefs[b.id]), top: b.id === most })
   }

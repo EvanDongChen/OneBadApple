@@ -145,7 +145,9 @@ The file is ignored by git and is only read by `npm run dev`, never by a product
 
 The game makes **two Gemini calls per in-game day**, one for the night and one for the day, so a whole game is usually 4 to 10 calls.
 
-The default model is `gemini-flash-lite-latest`, and you can pick another on the setup screen. There is a cap on calls per game, 80 by default. If a call fails or the cap is hit, the fruits carry on using the No AI rules.
+The default model is `gemini-flash-lite-latest`. The setup screen offers several others that work on a free key: Gemini 3.1 and 3.5 Flash-Lite, Gemma 4 26B and 31B, and the larger Flash models. **List** shows everything else your key can use.
+
+Each model has its own free allowance. With **Switch models when needed** ticked (the default), the game moves on to the next free model when one is busy or out of free requests, so a long session isn't stopped by one model's limit. There is also a cap on calls per game, 80 by default. If every model gives out or the cap is hit, the fruits carry on using the No AI rules.
 
 </details>
 

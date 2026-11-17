@@ -226,6 +226,20 @@ export function suspectedBy(self: FruitState): Record<string, number> {
   return out
 }
 
+/**
+ * Whether a fruit has any reason to hold an opinion about another: it knows (the seer's
+ * result), or it remembers something that fruit said or did, or something said about it.
+ * Starting hunches alone do not count, so nothing is drawn on the suspicion map or the
+ * arrows until the fruits have actually talked or voted.
+ */
+export function hasReason(self: FruitState, about: string): boolean {
+  const belief = self.beliefs[about]
+  if (belief === 0 || belief === 100) return true
+  return self.events.some(
+    (e) => e.kind !== 'death' && (('actor' in e && e.actor === about) || ('target' in e && e.target === about) || (e.kind === 'claim' && e.saw === about)),
+  )
+}
+
 /** Belief as the old -5 to +5 trust score. */
 export function trustOf(belief: number | undefined): number {
   return clamp(Math.round((50 - (belief ?? 50)) / 10), -5, 5)
