@@ -63,6 +63,7 @@ const VEIN_COLOR = '#e2412f'
 const GLOOM_COLOR = '#4a6fd0'
 const FLUSH = new Color('#ff2a1a')
 const PALE = new Color('#d8ecff')
+const ANGER_FLARE_MS = 4000 // how long the angry flush shows after something makes a fruit angrier
 const RUN_DUST = 3.2 // running faster than this, for the game speed, kicks up dust at every step
 const STREAK_SPEED = 3 // the wolf trails speed lines above this speed
 
@@ -151,6 +152,9 @@ export default function Fruit({ id }: { id: string }) {
   /** The body's material, found once, for tinting the skin with mood. */
   const skin = useRef<MeshStandardMaterial | null>(null)
   const tint = useRef(0)
+  /** Anger last frame, and until when the angry flush shows after it last went up. */
+  const lastAnger = useRef(fruit.mood.anger)
+  const angerUntil = useRef(0)
   /** Vertical speed last frame, for spotting the moment it lands. */
   const lastFall = useRef(0)
   const { alive, kind } = fruit
@@ -577,9 +581,15 @@ export default function Fruit({ id }: { id: string }) {
     // guilt: blue gloom lines down the forehead (and a pale face with fear). Flattered, smug
     // or delighted: pink hatching on the cheeks.
     const feel = fruit.mood
-    const angry = alive && (feel.anger > 0.45 || !!gunning)
+    // Anger lingers in the mood for days, so the flush and vein only show in the moment: for a
+    // few seconds after something makes it angrier, while it speaks its mind angrily, or while
+    // it holds the gun. Then the colour drains away again.
+    if (feel.anger > lastAnger.current + 0.05) angerUntil.current = now + ANGER_FLARE_MS
+    lastAnger.current = feel.anger
+    const angry = alive && (!!gunning || now < angerUntil.current || (feel.anger > 0.45 && !!speechText))
     const gloomy = alive && !angry && (mood === 'shake' || mood === 'sulk' || feel.fear > 0.5 || feel.grief > 0.45 || feel.guilt > 0.45)
-    const pale = alive && !angry && (mood === 'shake' || mood === 'gasp' || feel.fear > 0.5)
+    // Likewise the face only goes pale at the moment of a fright, not for as long as the fear lasts.
+    const pale = alive && !angry && (mood === 'shake' || mood === 'gasp')
     const blushing = alive && !angry && (mood === 'blush' || mood === 'cheer' || dancing || feel.smug > 0.45)
     if (blushMarks.current) blushMarks.current.visible = blushing
     if (veinMark.current) {
@@ -973,7 +983,8 @@ export default function Fruit({ id }: { id: string }) {
               {shielded && <span className="guard" title="Protected by the doctor tonight" />}
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
-              {reaction && reaction !== 'blush' && <Emote reaction={reaction} big={dramatic} />}
+              {/* Blushing and nervous shaking already show on the face, so they get no mark here. */}
+              {reaction && reaction !== 'blush' && reaction !== 'shake' && <Emote reaction={reaction} big={dramatic} />}
             </div>
           </div>
         </Html>

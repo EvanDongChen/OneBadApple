@@ -121,7 +121,7 @@ export default function Ghost({ id }: { id: string }) {
           <div className="name">
             {fruit.name}
             <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>
-            {reaction && <Emote reaction={reaction} />}
+            {reaction && reaction !== 'shake' && <Emote reaction={reaction} />}
           </div>
         </div>
       </Html>
