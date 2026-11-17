@@ -29,12 +29,15 @@ Nobody plays. You just watch it go wrong.
 | | |
 |---|---|
 | 🧠 **Two brains** | **Gemini AI** decides everything each fruit does and says. **No AI** runs on built-in personality rules and about 280 stock lines, with no key and no cost. |
-| 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and up to three quirks. Drag quirks like *Dramatic*, *Sassy* or *Pirate* onto a villager, or write your own. |
+| 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and up to three quirks. Drag quirks like *Dramatic*, *Sassy* or *Pirate* onto a villager, or write your own. Quirks change how a fruit behaves as well as how it talks, and every fruit has a one-line backstory it likes to bring up. |
 | 🐺 **Roles** | Werewolves and villagers, plus an optional seer, doctor, hunter and jester. You choose how many wolves and which roles are in play. |
 | 🤫 **Private conversations** | Fruits pair off and talk at the same time. Only the fruits in a conversation hear it, so rumours spread by word of mouth and get passed on wrongly. |
 | 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
 | 🔪 **Fruit physics** | Wobbly walking, floppy arms, stepping legs, and victims that fall apart into slices shaped like the fruit they were. |
-| 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong, each with a comic mark over its head. |
+| 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong, each with a comic mark beside its name. They turn to watch whoever is accused or hurries past. |
+| 👀 **Faces** | Fruits blink, raise or knit their eyebrows, and steal glances at whoever they trust least. A werewolf lets a smirk slip now and then. |
+| 🎬 **Director camera** | The camera follows the wolf at night, closes in on the kill and the shooting, and settles on whoever is speaking. Switch it off to steer yourself. |
+| 💥 **Comic-book moments** | "CHOP!", "BANG!", "CLANG!" and "GASP!" burst over the stage. The doctor's protection shows as a bubble the knife rings off, survivors wear a plaster, and the dead leave juice on the floor. |
 | 👻 **Ghosts** | Dead fruits rise as see-through ghosts and drift around the edge of the stage. They know who everyone really was, cheer or despair as the living vote, and think out loud about it where only you can read it. |
 | 🐺 **Wolf whispers** | With two or more werewolves, the pack slips out at night to argue over the victim, and you can read every word. |
 | 💬 **Last words** | A fruit that is voted out gets one final line: a plea, a curse, or a caught wolf's smug confession. Then the most aggressive fruit that voted for it carries out the sentence with a gun. |
@@ -42,7 +45,7 @@ Nobody plays. You just watch it go wrong.
 | 🗣️ **Voices** | Every fruit babbles in soft musical blips that follow the rhythm of its line: the kind of fruit sets the pitch, and chatty fruits gabble faster. All the voices share one scale, so they stay in tune with each other. When several conversations run at once you hear the one nearest the camera. |
 | 📜 **Recap** | When the game ends, read back who killed whom, how every vote went, and when each fruit changed its mind about another, marked right or wrong. |
 | 🍐 **Thirteen fruits** | Apple, orange, lemon, plum, pear, lime, peach, blueberry, cherry, kiwi, banana, strawberry and watermelon, each with its own shape. Every visit starts with a random village. |
-| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, and sound on or off. |
+| ⏯️ **Spectator controls** | Pause, 1x / 2x / 4x speed (the fruits walk faster too), peek at roles, show thoughts, director camera on or off, and sound on or off. |
 
 ## 📸 Screenshots
 
@@ -180,6 +183,9 @@ src/
 │   ├── store.ts            shared game state and saved settings
 │   └── types.ts            shared shapes, including the Brain interface
 └── components/             what you see
+    ├── Scene.tsx           the 3D scene, loaded after the interface
+    ├── Director.tsx        the camera that follows the action
+    ├── TitleScreen.tsx     the opening screen
     ├── Fruit.tsx           one fruit: wobble physics, legs, arms, face, bubbles
     ├── Ghost.tsx           the ghost of a dead fruit
     ├── BubbleLayout.tsx    keeps speech bubbles from covering each other

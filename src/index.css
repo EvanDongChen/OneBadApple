@@ -262,6 +262,74 @@ label {
   opacity: 0.7;
 }
 
+/* ---------- Title screen ---------- */
+
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 22px;
+  background: #fff;
+}
+
+.title {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5vh 16px 7vh;
+  text-align: center;
+}
+
+.title-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.title-card img {
+  width: clamp(96px, 16vw, 170px);
+  height: auto;
+  transform: rotate(-8deg);
+  filter: drop-shadow(0 6px 0 var(--ink));
+}
+
+.title-card h1 {
+  font-size: clamp(48px, 9vw, 104px);
+  line-height: 0.9;
+  text-align: left;
+  -webkit-text-stroke: 3px var(--ink);
+  text-shadow: 4px 6px 0 var(--ink);
+}
+
+.title-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 6px 0 var(--ink);
+  padding: 16px 26px;
+  pointer-events: auto;
+}
+
+.title-foot p {
+  font-weight: 800;
+}
+
+.title-foot .primary {
+  font-size: 26px;
+  padding: 12px 30px;
+}
+
 /* ---------- Setup screen ---------- */
 
 .setup {
