@@ -101,12 +101,12 @@ export default function RelationshipMap({ onClose }: { onClose(): void }) {
       </div>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="A diagram of which fruits suspect which">
         <defs>
-          <marker id="map-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 Z" fill="#c2261a" />
-          </marker>
-          <marker id="map-arrow-calm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M0 0 L10 5 L0 10 Z" fill="#1f8a5b" />
-          </marker>
+          {/* One arrowhead per fruit, in its colour. */}
+          {living.map((f) => (
+            <marker key={f.id} id={`map-arrow-${f.id}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 Z" style={{ fill: `color-mix(in srgb, ${LOOKS[f.kind].color} 80%, #2a1a12)` }} />
+            </marker>
+          ))}
         </defs>
 
         {shown.map((e) => {
@@ -116,11 +116,11 @@ export default function RelationshipMap({ onClose }: { onClose(): void }) {
           if (calm && !pick) return null
           const strength = Math.max(0, Math.min(1, (e.belief - 15) / 70))
           return (
-            <g key={`${e.from}-${e.to}`} className={`edge${calm ? ' calm' : ''}`}>
+            <g key={`${e.from}-${e.to}`} className={`edge${calm ? ' calm' : ''}`} style={{ '--fruit': LOOKS[fruits.find((f) => f.id === e.from)!.kind].color } as React.CSSProperties}>
               <path
                 d={d}
                 style={{ strokeWidth: calm ? 1.5 : 1.2 + strength * 4.5, opacity: calm ? 0.7 : pick ? 0.9 : 0.3 + strength * 0.65 }}
-                markerEnd={`url(#${calm ? 'map-arrow-calm' : 'map-arrow'})`}
+                markerEnd={`url(#map-arrow-${e.from})`}
               />
               {pick && (
                 <text x={lx} y={ly} className="pct">
