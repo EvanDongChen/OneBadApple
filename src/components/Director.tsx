@@ -5,6 +5,8 @@ import { fruitPositions, useSim } from '../sim/store'
 
 const WIDE = 24 // camera distance for the whole stage
 const HOME = new Vector3(0, 1, 0)
+const SAME_GROUP = 3.5 // speakers this close to the current conversation are part of it
+const MOVE_ON_MS = 2500 // how long a conversation must be silent before the camera leaves it
 
 /**
  * The director: while it is switched on, the camera goes to wherever the story is.
@@ -18,6 +20,7 @@ export default function Director() {
   const camera = useThree((s) => s.camera)
   const want = useMemo(() => new Vector3(), [])
   const offset = useMemo(() => new Vector3(), [])
+  const anchor = useMemo(() => new Vector3(), [])
   const shot = useRef({ subject: null as string | null, since: 0, wasGame: false, returning: false })
 
   useFrame((_, delta) => {
@@ -57,20 +60,36 @@ export default function Director() {
       } else if (sim.party) {
         distance = 17
       } else {
-        // Stay on a speaker until it finishes, then cut to whoever is talking nearest to where
-        // the camera already is, which keeps it with one conversation rather than hopping about.
-        if (!(s.subject && speakers.includes(s.subject))) {
-          if (speakers.length) {
-            s.subject = speakers.reduce((a, b) => ((at(b)?.distanceTo(controls.target) ?? Infinity) < (at(a)?.distanceTo(controls.target) ?? Infinity) ? b : a))
+        // Several groups talk at once. The camera picks one conversation and stays with it:
+        // `anchor` is the spot where that conversation is happening. In the pause between two
+        // lines it waits there for the next speaker in the same group, and only moves on to
+        // another group once this one has been quiet for a while, which means it has finished.
+        const speaking = s.subject && speakers.includes(s.subject) ? at(s.subject) : undefined
+        if (speaking) {
+          anchor.copy(speaking)
+          s.since = now
+        } else {
+          const far = (id: string) => at(id)?.distanceTo(anchor) ?? Infinity
+          const here = s.subject ? speakers.filter((id) => far(id) < SAME_GROUP) : []
+          if (here.length) {
+            s.subject = here[0]
+          } else if (!s.subject || now - s.since > MOVE_ON_MS) {
+            // Nothing to stay for: go to the nearest conversation still going, or pull back out.
+            s.subject = speakers.length ? speakers.reduce((a, b) => (far(b) < far(a) ? b : a)) : null
             s.since = now
-          } else if (now - s.since > 1600) {
-            s.subject = null
           }
+          const next = at(s.subject)
+          if (next && s.subject && speakers.includes(s.subject)) anchor.copy(next)
         }
-        const subject = at(s.subject) ?? (sim.phase === 'dawn' ? at(sim.focusId) : undefined)
-        if (subject) {
-          want.copy(subject)
+        if (s.subject) {
+          want.copy(anchor)
           distance = sim.phase === 'vote' ? 13 : 10
+        } else {
+          const body = sim.phase === 'dawn' ? at(sim.focusId) : undefined
+          if (body) {
+            want.copy(body)
+            distance = 10
+          }
         }
       }
     }
@@ -86,6 +105,8 @@ export default function Director() {
     )
     camera.position.copy(controls.target).addScaledVector(offset.normalize(), length)
     controls.update()
+    // Dev builds expose what the camera is looking at, so its behaviour can be measured.
+    if (import.meta.env.DEV) Object.assign(window, { __cameraTarget: controls.target })
 
     if (s.returning && Math.abs(length - WIDE) < 0.2 && controls.target.distanceTo(HOME) < 0.2) s.returning = false
   })
