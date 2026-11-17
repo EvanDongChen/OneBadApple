@@ -3,6 +3,7 @@
  *   {x} the fruit being talked to or about
  *   {y} a second fruit (the one being gossiped about)
  *   {d} the most recently dead fruit
+ *   {n} a number: a day, or a percentage
  */
 
 /** Meeting: accusing {x}, from an aggressive fruit. */
@@ -530,3 +531,70 @@ export const BACKSTORIES = [
 
 /** Ways a fruit brings its backstory, {b}, into a conversation. */
 export const BACKSTORY_TALK = ['Did I ever tell you? {b}', 'This is nothing. {b}', 'It takes me back. {b}', 'You would not understand. {b}', 'I have seen worse. {b}']
+
+// ---------- Lines that quote a fruit's memory. {x} is who it is about, {y} a second fruit, {n} a day number. ----------
+
+/** Said to a third fruit about {x}. */
+export const CITE_VOTED_INNOCENT = ['{x} voted for {y} on day {n}, and {y} was innocent.', 'Remember day {n}? {x} helped vote {y} out. {y} was one of us.', 'I keep coming back to day {n}. {x} pointed at {y}, and {y} was clean.']
+export const CITE_DEFENDED_WOLF = ['{x} stood up for {y}. And {y} was a wolf.', 'Who defended {y}, right up until the teeth came out? {x} did.', '{x} told us {y} was fine. {y} was a werewolf.']
+export const CITE_ACCUSED_DEAD = ['{x} kept naming {y}. Then {y} turned up dead.', 'On day {n}, {x} wanted {y} gone. The wolf obliged.', 'Funny how {x} had it in for {y}, and now {y} is in slices.']
+export const CITE_ACCUSED_ME = ['{x} came for me on day {n}. I have not forgotten.', 'On day {n}, {x} tried to pin it on me. Ask yourself why.', '{x} has been after me since day {n}.']
+export const CITE_VOTED_ME = ['{x} voted for me on day {n}. I remember every vote.', 'On day {n}, {x} tried to have me thrown out.']
+export const CITE_CAUGHT = ['{x} told me two different stories about the same night.', 'Ask {x} where it was that night. Then ask again tomorrow.', "{x}'s story keeps changing. I heard both versions."]
+export const CITE_VOTED_WOLF = ['{x} voted for {y}, and {y} was a wolf. That counts for something.', 'Say what you like about {x}, but it got {y} right on day {n}.']
+export const CITE_DEFENDED_ME = ['{x} stood by me on day {n}. I do not forget that.', '{x} spoke up for me when nobody else would.']
+
+/** The same memories, said to {x}'s face. */
+export const FACE_VOTED_INNOCENT = ['You voted for {y} on day {n}, {x}, and {y} was innocent.', 'Day {n}, {x}. You helped throw {y} out. {y} was one of us.']
+export const FACE_DEFENDED_WOLF = ['You stood up for {y}, {x}. And {y} was a wolf.', 'You told us {y} was fine, {x}. Care to explain?']
+export const FACE_ACCUSED_DEAD = ['You kept naming {y}, {x}. Then {y} turned up dead.', 'You wanted {y} gone on day {n}, {x}. Somebody listened.']
+export const FACE_ACCUSED_ME = ['You came for me on day {n}, {x}. I have not forgotten.', 'You tried to pin it on me on day {n}, {x}. Why was that?']
+export const FACE_VOTED_ME = ['You voted for me on day {n}, {x}. I remember every vote.', 'You tried to have me thrown out on day {n}, {x}.']
+export const FACE_CAUGHT = ['That is not what you told me before, {x}.', 'Your story has changed, {x}. I heard the first version too.', 'Which is it, {x}? You have told it two ways now.']
+
+/** A werewolf claiming to have seen {x} out on the night in question. Its lies about a night are tracked. */
+export const WOLF_SAW = [
+  'I saw {x} sneaking around the huts last night. Explain that.',
+  'I woke in the night and {x} was standing in the plaza. Just standing.',
+  'I trust my eyes, and my eyes saw {x} out after dark.',
+  'I did not want to say it, but I watched {x} creep past my door last night.',
+  'Last night I looked out and there was {x}, wide awake and going somewhere.',
+]
+
+/** A careless werewolf forgetting what it claimed: now it says it slept and saw nothing. */
+export const WOLF_SLIP = ['I slept straight through last night. Saw nothing, heard nothing.', 'How would I know? I was fast asleep all night.', 'I never left my bed last night. I did not see a soul.']
+
+/** Theory of mind: {y} suspects the speaker, so it asks {x} for support before the vote. */
+export const ALLY_PLEA = ['{y} thinks it is me, {x}. Will you stand with me at the vote?', '{x}, {y} is going to come for me today. I need someone on my side.', 'I can tell {y} has made up its mind about me. Do not let them do it, {x}.']
+export const PLEA_YES = ["I'm with you. I never believed it.", 'You have my vote. Well, not that way.', 'I will speak up for you. You have my word.']
+export const PLEA_NO = ['We will see how the vote goes.', 'I am not promising anything.', 'Give me a reason, and I might.']
+
+/** A contrarian doubting {x}'s guilt because everyone else is sure of it. */
+export const CONTRARY = ['Everyone says {x}. That is exactly why I doubt it.', 'When the whole village agrees on {x}, I get nervous.', 'It is too neat. {x} is who the wolf WANTS us to pick.']
+
+/** Grief: {d} is dead and the speaker blames {x}. */
+export const GRIEF_TALK = ['They took {d}. And I think it was {x}.', '{d} was my friend. {x} is going to answer for it.', 'I cannot stop thinking about {d}. I look at {x} and I just know.']
+
+/** Smug: the speaker voted for {y}, who turned out to be a wolf. */
+export const TOLD_YOU = ['I said it was {y}. Nobody listened.', 'Who called {y}? I did. You are welcome.', 'Next time, perhaps we go with my guess first.']
+
+/** Defending itself while frightened. */
+export const DEFEND_SCARED = ['Please. It is not me. Why would you say that?', 'I did not do anything. I swear on my stem.', 'Do not look at me like that. I am scared too.']
+
+/** Vote reasons shaped by mood. */
+export const VOTE_GUILT = ['I got it wrong last time. I do not trust my own judgement today.', 'After what we did yesterday, I am just going with the rest of you.', 'I still feel sick about the last vote. Forgive me.']
+export const VOTE_AFRAID = ['I do not want to be next. I am voting with everyone else.', 'Please do not turn on me. I will go along with it.']
+
+/** A guilty fruit apologising to the ghost of {x}, whom it helped vote out. */
+export const APOLOGY = ['I am sorry, {x}. I was wrong about you.', '{x}, if you can hear me: I should not have voted for you.', 'We got it wrong, {x}. I got it wrong.']
+export const GHOST_APOLOGY = ['Too late. But thank you.', 'I know. Now go and find the real one.', 'Hm. I will haunt you a little less.']
+
+/** More private thoughts. {x} is who it is about, {n} a percentage. */
+export const THOUGHT_SURE = ['I am {n}% sure it is {x}.', '{n}% it is {x}. That is enough for me.', 'If I had to bet: {x}, {n}%.']
+export const THOUGHT_THREAT = ['{x} thinks it is me. I need friends before the vote.', '{x} is going to vote for me. I have to get ahead of it.', 'I can see what {x} believes. I need allies.']
+export const THOUGHT_CAUGHT = ["{x} changed its story. I heard both versions.", 'Two nights, two stories. {x} is lying.']
+export const THOUGHT_GRIEF = ['I miss them. And {x} is going to pay.', 'It should have been me. It should have been {x}.']
+export const THOUGHT_GUILT = ['We killed an innocent fruit. I helped.', 'I cannot trust my own vote any more.']
+export const THOUGHT_PROTECT = ['Whatever happens, {x} stays safe.', 'I do not care who the wolf is, as long as it is not {x}.']
+export const THOUGHT_REVENGE = ['Wolf or not, I want {x} gone.', 'This is my chance to be rid of {x}.']
+export const THOUGHT_SURVIVE = ['Keep my head down. Vote with the crowd. Stay alive.', 'I do not need to be right. I need to be here tomorrow.']
