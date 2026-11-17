@@ -253,6 +253,39 @@ async function hunterShot(dead: FruitState, revenge: string | null, signal: Abor
   await wait(2200, signal)
 }
 
+/** The dead watch the vote. They know who everyone really was, and take it personally. */
+function ghostsReact(targetIsWolf: boolean, ms: number, signal: AbortSignal, except?: string) {
+  const dead = get().fruits.filter((f) => !f.alive && f.id !== except)
+  // Village ghosts are pleased when a wolf is in trouble; a wolf's ghost is pleased when an innocent is.
+  react(dead.filter((f) => (f.role === 'werewolf') !== targetIsWolf).map((f) => f.id), 'cheer', ms, signal)
+  react(dead.filter((f) => (f.role === 'werewolf') === targetIsWolf).map((f) => f.id), 'sulk', ms, signal)
+}
+
+/** With more than one werewolf, the pack slips out to argue in whispers over who to kill. */
+async function wolfHuddle(wolves: FruitState[], lines: NonNullable<NightScript['wolfChat']>, signal: AbortSignal) {
+  log({ kind: 'system', text: 'The werewolves slip out to whisper.' })
+  const ids = wolves.map((w) => w.id)
+  const angle = Math.atan2(wolves[0].home[1], wolves[0].home[0])
+  const targets: Record<string, [number, number]> = {}
+  const lookAt: Record<string, string> = {}
+  wolves.forEach((wolf, i) => {
+    const a = angle + Math.PI / 2 + (i / wolves.length) * Math.PI * 2
+    targets[wolf.id] = [Math.cos(angle) * TALK_RING + Math.cos(a) * 0.95, Math.sin(angle) * TALK_RING + Math.sin(a) * 0.95]
+    lookAt[wolf.id] = ids[(i + 1) % ids.length]
+  })
+  set((s) => ({ follow: {}, lookAt, targets: { ...s.targets, ...targets } }))
+  await until(() => arrived(ids), 9000, signal)
+  for (const line of lines) {
+    const speaker = wolves.find((w) => w.id === line.id)
+    if (!speaker) continue
+    const listeners = ids.filter((id) => id !== speaker.id)
+    set((s) => ({ lookAt: { ...s.lookAt, ...Object.fromEntries(listeners.map((id) => [id, speaker.id])) } }))
+    hear(ids, `${speaker.name}: ${line.say}`)
+    await say(speaker, line.say, { kind: 'say', to: listeners.map((id) => byId(id).name).join(' & ') }, signal)
+  }
+  await wait(300, signal)
+}
+
 /** Returns the hunter's standing revenge choice, for use if it dies during the coming day. */
 async function night(brain: Brain, signal: AbortSignal): Promise<string | null> {
   const { day } = get()
@@ -286,6 +319,8 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
     )
   }
 
+  if (wolves.length > 1 && script.wolfChat?.length) await wolfHuddle(wolves, script.wolfChat, signal)
+
   // Act it out: the wolf hurries over with a knife, lunges, and the victim is chopped.
   set((s) => ({ follow: { ...s.follow, [attacker.id]: victim.id }, attack: { attackerId: attacker.id, victimId: victim.id, striking: false } }))
   await until(() => near(attacker.id, victim.id, 2), 9000, signal)
@@ -300,7 +335,7 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
   // Day only breaks once the wolf has hurried back to its own spot.
   set((s) => ({ attack: s.attack && { ...s.attack, striking: false } }))
   sendTo((f) => f.home)
-  await until(() => arrived([attacker.id]), 10000, signal)
+  await until(() => arrived(wolves.map((w) => w.id)), 10000, signal)
   set({ attack: null })
   await wait(700, signal)
 
@@ -317,7 +352,7 @@ async function night(brain: Brain, signal: AbortSignal): Promise<string | null> 
     // Everyone turns to the body and flinches.
     set({ focusId: victim.id })
     gasp()
-    react(alive().map((f) => f.id), 'gasp', 1800, signal)
+    react(get().fruits.filter((f) => f.id !== victim.id).map((f) => f.id), 'gasp', 1800, signal)
     await hunterShot(victim, script.revenge, signal)
   }
   await wait(2500, signal)
@@ -378,6 +413,7 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
     set((s) => ({ votes: { ...s.votes, [ballot.id]: target.id }, lookAt: { ...s.lookAt, [ballot.id]: target.id } }))
     voteTick()
     react([target.id], 'shake', 1500, signal)
+    ghostsReact(target.role === 'werewolf', 1400, signal)
     await say(byId(ballot.id), `I vote ${target.name}. ${ballot.reason}`.trim(), { kind: 'vote' }, signal)
   }
 
@@ -391,8 +427,13 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
   if (leaders.length > 1) {
     record({ kind: 'vote', day: get().day, ballots, out: null, tied: leaders })
     log({ kind: 'system', text: `The vote is tied between ${leaders.map((id) => byId(id).name).join(' and ')}. Nobody is eliminated.` })
+    // Nobody, living or dead, knows what to make of that.
+    react(get().fruits.map((f) => f.id), 'puzzle', 2200, signal)
   } else {
     const out = byId(leaders[0])
+    // The condemned fruit gets a last word before it is flung out.
+    const lastWords = votes.find((v) => v.id === out.id)?.lastWords
+    if (lastWords) await say(out, lastWords, { kind: 'vote' }, signal)
     kill(out.id, false)
     record({ kind: 'vote', day: get().day, ballots, out: out.id, tied: [] })
     log({ kind: 'system', text: `${out.name} is voted out with ${top} votes. They were ${ROLE_LABEL[out.role]}.` })
@@ -409,6 +450,7 @@ async function vote(votes: DayScript['votes'], revenge: string | null, signal: A
         sulk()
         react(living.filter((f) => get().votes[f.id] === out.id).map((f) => f.id), 'sulk', 2400, signal)
       }
+      ghostsReact(out.role === 'werewolf', 2400, signal, out.id)
       await hunterShot(out, revenge, signal)
     }
   }

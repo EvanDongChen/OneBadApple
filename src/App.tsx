@@ -4,6 +4,7 @@ import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import Stage from './components/Stage'
 import Fruit from './components/Fruit'
+import Ghost from './components/Ghost'
 import Hud from './components/Hud'
 import SetupPanel from './components/SetupPanel'
 import { useSim } from './sim/store'
@@ -11,6 +12,7 @@ import { useSim } from './sim/store'
 export default function App() {
   const ids = useSim((s) => s.fruits.map((f) => f.id).join(','))
   const screen = useSim((s) => s.screen)
+  const ghosts = useSim((s) => (s.screen === 'game' ? s.fruits.filter((f) => !f.alive).map((f) => f.id).join(',') : ''))
 
   return (
     <>
@@ -23,6 +25,7 @@ export default function App() {
               <Fruit key={id} id={id} />
             ))}
           </Physics>
+          {ghosts && ghosts.split(',').map((id) => <Ghost key={id} id={id} />)}
         </Suspense>
         <OrbitControls target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={55} enablePan={false} />
       </Canvas>

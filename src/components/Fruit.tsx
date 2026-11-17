@@ -6,6 +6,7 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import { Group, Mesh, Quaternion, Vector3 } from 'three'
 import { PARTY_BEAT_MS } from '../sim/sfx'
 import { fruitPositions, useSim } from '../sim/store'
+import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
@@ -388,6 +389,7 @@ export default function Fruit({ id }: { id: string }) {
       else if (mood === 'gasp') shape = 3
       else if (mood === 'sulk') shape = FROWN
       else if (mood === 'shake') shape = Math.floor(performance.now() / 70) % 2
+      else if (mood === 'puzzle') shape = 1
     }
     // Eyes go wide with shock or fear and droop when sulking.
     eyeMeshes.current.forEach((mesh) => {
@@ -590,8 +592,10 @@ export default function Fruit({ id }: { id: string }) {
       </group>
 
       <group ref={overlay}>
+        {/* Once a fruit is dead its ghost carries the name tag instead. */}
+        {alive && (
         <Html center zIndexRange={[10, 0]}>
-          <div className={`fruit-tag${alive ? '' : ' dead'}`}>
+          <div className="fruit-tag">
             {speechText && alive && (
               <div className="bubble">
                 <RichText text={speechText} />
@@ -610,12 +614,14 @@ export default function Fruit({ id }: { id: string }) {
               </div>
             )}
             {votesAgainst > 0 && alive && <div className="tally">{'✗'.repeat(votesAgainst)}</div>}
+            {reaction && <Emote reaction={reaction} />}
             <div className="name">
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
             </div>
           </div>
         </Html>
+        )}
       </group>
     </>
   )

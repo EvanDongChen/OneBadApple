@@ -860,9 +860,68 @@ button.roster-row.on {
   padding: 3px 8px 2px;
 }
 
-.fruit-tag.dead .name {
-  opacity: 0.65;
-  text-decoration: line-through;
+/* A ghost's tag: pale and dashed. */
+.fruit-tag.ghost .name {
+  background: #f4f0ff;
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+/* Comic marks that pop up over a fruit to show how it feels. */
+.emote {
+  font-family: var(--display);
+  font-size: 34px;
+  line-height: 0.9;
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 3px 0 var(--ink);
+  animation: pop 0.25s ease-out;
+}
+
+.emote.gasp {
+  color: var(--apple);
+}
+
+.emote.cheer {
+  color: #ff6fa3;
+}
+
+.emote .dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.emote .dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #8d9bb0;
+  border: 2.5px solid var(--ink);
+}
+
+.emote.puzzle {
+  color: var(--plum);
+}
+
+.emote .drop {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 4px 0 6px;
+  background: #58b6f0;
+  border: 2.5px solid var(--ink);
+  border-radius: 0 60% 60% 60%;
+  transform: rotate(45deg);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.2) translateY(12px);
+  }
+  70% {
+    transform: scale(1.25);
+  }
 }
 
 /* Comic speech bubble with a tail. */
@@ -960,6 +1019,7 @@ button.roster-row.on {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .emote,
   .fruit-tag .bubble.thinking i {
     animation: none;
   }
