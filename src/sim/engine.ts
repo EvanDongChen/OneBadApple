@@ -224,6 +224,18 @@ function kill(id: string, chop: boolean) {
 }
 
 /** Store each fruit's new thought and feelings so the next prompt (and the UI) can use them. */
+/**
+ * Turn an AI-written trust score (-5 to +5) into "how sure, in percent, that this one is a
+ * wolf". No opinion (0) means the plain odds of a fruit being a wolf, not a coin toss, so a
+ * fruit with nothing to go on is not shown as half sure about everyone.
+ */
+function trustToBelief(trust: number, fruits: FruitState[]): number {
+  const living = fruits.filter((f) => f.alive)
+  const odds = (living.filter((f) => f.role === 'werewolf').length / Math.max(1, living.length - 1)) * 100
+  const belief = trust <= 0 ? odds + (-trust / 5) * (95 - odds) : odds - (trust / 5) * (odds - 3)
+  return Math.round(Math.max(2, Math.min(98, belief)))
+}
+
 function applyMinds(minds: NightScript['minds'], fromBeliefs = false) {
   const { day, fruits } = get()
   for (const mind of minds) {
@@ -247,7 +259,7 @@ function applyMinds(minds: NightScript['minds'], fromBeliefs = false) {
         feelings[feel.about] = { trust: feel.trust, note: feel.note }
         // When the AI wrote the trust scores, they become the fruit's beliefs. Knowledge (0 or 100) stays put.
         if (!fromBeliefs && feel.about in beliefs && beliefs[feel.about] !== 0 && beliefs[feel.about] !== 100) {
-          beliefs[feel.about] = Math.max(2, Math.min(98, 50 - feel.trust * 10))
+          beliefs[feel.about] = trustToBelief(feel.trust, s.fruits)
         }
       }
       return { ...f, thought: mind.thought || f.thought, feelings, beliefs }

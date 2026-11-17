@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { BufferAttribute, BufferGeometry, DoubleSide } from 'three'
 import type { Group, Mesh } from 'three'
+import { hasReason } from '../sim/mind'
 import { fruitPositions, useSim } from '../sim/store'
 import { LOOKS } from './fruitLooks'
 
@@ -46,7 +47,8 @@ export default function SuspicionArrows() {
   const edges: Edge[] = []
   for (const a of living) {
     // Packmates know each other; that is not a suspicion and would give the wolves away.
-    const others = living.filter((b) => b.id !== a.id && b.id in a.beliefs && !(a.role === 'werewolf' && b.role === 'werewolf'))
+    // Only once it has a reason: a starting hunch is not drawn.
+    const others = living.filter((b) => b.id !== a.id && b.id in a.beliefs && !(a.role === 'werewolf' && b.role === 'werewolf') && hasReason(a, b.id))
     const most = others.reduce<string | null>((best, b) => (best === null || a.beliefs[b.id] > a.beliefs[best] ? b.id : best), null)
     for (const b of others) {
       const belief = Math.round(a.beliefs[b.id])
