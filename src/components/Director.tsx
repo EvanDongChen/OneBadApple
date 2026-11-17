@@ -34,6 +34,8 @@ export default function Director() {
 
   useFrame((_, delta) => {
     if (!controls) return
+    // Dev builds expose the camera and its controls, so tests can point it somewhere.
+    if (import.meta.env.DEV) Object.assign(window, { __view: { camera, controls } })
     const sim = useSim.getState()
     // The opening descent, in step with the sky sliding away on the title screen.
     if (sim.screen === 'title') {

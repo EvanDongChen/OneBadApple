@@ -180,7 +180,7 @@ function outline(kind: FruitKind): Vector2[] {
 }
 
 /** How wide the fruit is at a given height. */
-function radiusAt(kind: FruitKind, y: number): number {
+export function radiusAt(kind: FruitKind, y: number): number {
   const points = outline(kind)
   let widest = 0
   for (let i = 0; i < points.length - 1; i++) {

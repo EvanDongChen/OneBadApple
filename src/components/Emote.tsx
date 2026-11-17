@@ -1,6 +1,6 @@
 import type { Reaction } from '../sim/types'
 
-const GLYPH: Record<Reaction, string> = { gasp: '!', shake: '', cheer: '♥', sulk: '', puzzle: '?' }
+const GLYPH: Record<Reaction, string> = { gasp: '!', shake: '', cheer: '♥', sulk: '', puzzle: '?', blush: '' }
 
 /** A comic-book mark that pops up over a fruit's head so its reaction reads from far away. */
 export default function Emote({ reaction, big }: { reaction: Reaction; big?: boolean }) {

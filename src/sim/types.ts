@@ -162,8 +162,8 @@ export interface Conversation {
   lines: { id: string; say: string; accuses?: string; vouches?: string; claim?: { night: number; saw: string | null } }[]
 }
 
-/** A short burst of body language: a gasp, a nervous shake, a cheer, a sulk or a puzzled look. */
-export type Reaction = 'gasp' | 'shake' | 'cheer' | 'sulk' | 'puzzle'
+/** A short burst of body language: a gasp, a nervous shake, a cheer, a sulk, a puzzled look, or blushing when flattered. */
+export type Reaction = 'gasp' | 'shake' | 'cheer' | 'sulk' | 'puzzle' | 'blush'
 
 /** One entry in the end-of-game recap. Fruits are referred to by id. */
 export type RecapEvent =

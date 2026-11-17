@@ -3,12 +3,15 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
-import { DoubleSide, Group, Mesh, Quaternion, Vector3 } from 'three'
+import { Color, DoubleSide, Group, Mesh, Quaternion, Vector3 } from 'three'
+import type { MeshStandardMaterial } from 'three'
+import type { FruitKind } from '../sim/types'
 import { PARTY_BEAT_MS } from '../sim/sfx'
 import { fruitPositions, fruitSpeeds, ghostPositions, useSim } from '../sim/store'
+import { puff } from './Dust'
 import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
-import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
+import { anchors, radiusAt, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
 import RichText from './RichText'
 
 // Body
@@ -53,6 +56,16 @@ const ARM_SEGMENT = 0.3
 const ARM_DRAG = 0.94
 const ARM_GRAVITY = 12
 
+// Mood marks, drawn flat on the face like a cartoon: pink hatching on the cheeks, a red
+// "popping vein" on the brow, and blue gloom lines hanging down the forehead.
+const BLUSH_COLOR = '#ff6f8a'
+const VEIN_COLOR = '#e2412f'
+const GLOOM_COLOR = '#4a6fd0'
+const FLUSH = new Color('#ff2a1a')
+const PALE = new Color('#d8ecff')
+const RUN_DUST = 3.2 // running faster than this, for the game speed, kicks up dust at every step
+const STREAK_SPEED = 3 // the wolf trails speed lines above this speed
+
 const UP = new Vector3(0, 1, 0)
 const DT = 1 / 60
 const limbDir = new Vector3()
@@ -82,6 +95,23 @@ interface Foot {
 function makeFoot(x: number, z: number): Foot {
   const pos = new Vector3(x, FOOT_Y, z)
   return { pos, from: pos.clone(), to: pos.clone(), t: 1 }
+}
+
+/**
+ * Where to stick a flat mark on the face: `x` across and `dy` up from the middle of the face,
+ * pressed onto the skin of this particular fruit's shape and turned to face outward.
+ */
+function onSkin(kind: FruitKind, face: { y: number }, across: number, dy: number) {
+  const y = face.y + dy
+  // On a thin fruit, like the banana, marks are drawn in closer to the middle so they stay on the face.
+  const x = Math.sign(across) * Math.min(Math.abs(across), radiusAt(kind, y) * 0.55)
+  const r = Math.max(Math.abs(x) + 0.02, radiusAt(kind, y))
+  // How much the skin leans back here, from how quickly the fruit narrows above this height.
+  const slope = (radiusAt(kind, y - 0.03) - radiusAt(kind, y + 0.03)) / 0.06
+  return {
+    position: [x, y, Math.sqrt(r * r - x * x) + 0.014] as [number, number, number],
+    rotation: [-Math.atan(slope), Math.asin(x / r), 0] as [number, number, number],
+  }
 }
 
 export default function Fruit({ id }: { id: string }) {
@@ -114,6 +144,15 @@ export default function Fruit({ id }: { id: string }) {
   const knife = useRef<Group>(null)
   const gun = useRef<Group>(null)
   const shield = useRef<Mesh>(null)
+  const blushMarks = useRef<Group>(null)
+  const veinMark = useRef<Group>(null)
+  const gloomMarks = useRef<Group>(null)
+  const streaks = useRef<Group>(null)
+  /** The body's material, found once, for tinting the skin with mood. */
+  const skin = useRef<MeshStandardMaterial | null>(null)
+  const tint = useRef(0)
+  /** Vertical speed last frame, for spotting the moment it lands. */
+  const lastFall = useRef(0)
   const { alive, kind } = fruit
   // Where the face and arms sit on this fruit's particular shape.
   const face = useMemo(() => anchors(kind), [kind])
@@ -446,6 +485,29 @@ export default function Fruit({ id }: { id: string }) {
 
     if (overlay.current) overlay.current.position.set(t.x, t.y + 1.15, t.z)
 
+    // Landing: a fall that has just stopped kicks up a puff of dust.
+    if (!chop && lastFall.current < -2.5 && lv.y > lastFall.current + 1.5 && t.y < HOVER_HEIGHT + 0.35) {
+      puff(t.x, t.z, Math.min(1.5, -lastFall.current / 5))
+    }
+    lastFall.current = lv.y
+
+    // Speed lines streaming out behind the wolf as it hurries through the night.
+    if (streaks.current) {
+      const speed = Math.hypot(lv.x, lv.z)
+      const show = armed && alive && speed > STREAK_SPEED
+      streaks.current.visible = show
+      if (show) {
+        streaks.current.position.set(t.x, t.y, t.z)
+        streaks.current.rotation.set(0, Math.atan2(lv.x, lv.z), 0)
+        streaks.current.children.forEach((line, i) => {
+          // Each line flickers in length so they read as rushing air.
+          const length = (0.5 + speed * 0.14) * (0.6 + Math.random() * 0.6)
+          line.scale.set(1, 1, length)
+          line.position.z = -0.95 - length / 2 - (i % 2) * 0.2
+        })
+      }
+    }
+
     // The doctor's bubble stays upright around the fruit, pulses gently, and flares when struck.
     if (shield.current) {
       shield.current.visible = !!shielded && alive
@@ -474,6 +536,7 @@ export default function Fruit({ id }: { id: string }) {
       else if (mood === 'shake') shape = Math.floor(performance.now() / 70) % 2
       else if (mood === 'puzzle') shape = 1
       // A grieving fruit's mouth stays turned down.
+      else if (mood === 'blush') shape = 1
       else if (alive && !dancing && fruit.mood.grief > 0.5) shape = FROWN
     }
     // The face has a life of its own: it blinks, steals glances at whoever it trusts least,
@@ -510,6 +573,36 @@ export default function Fruit({ id }: { id: string }) {
       // Which side of this fruit the suspect is standing on.
       if (at) glance = Math.sign(v.tmp.set(1, 0, 0).applyQuaternion(v.quat).dot(v.hip.subVectors(at, v.pos)))
     }
+    // Mood on the face, cartoon style. Anger: a red flush and a popping vein. Fear, grief and
+    // guilt: blue gloom lines down the forehead (and a pale face with fear). Flattered, smug
+    // or delighted: pink hatching on the cheeks.
+    const feel = fruit.mood
+    const angry = alive && (feel.anger > 0.45 || !!gunning)
+    const gloomy = alive && !angry && (mood === 'shake' || mood === 'sulk' || feel.fear > 0.5 || feel.grief > 0.45 || feel.guilt > 0.45)
+    const pale = alive && !angry && (mood === 'shake' || mood === 'gasp' || feel.fear > 0.5)
+    const blushing = alive && !angry && (mood === 'blush' || mood === 'cheer' || dancing || feel.smug > 0.45)
+    if (blushMarks.current) blushMarks.current.visible = blushing
+    if (veinMark.current) {
+      veinMark.current.visible = angry
+      veinMark.current.scale.setScalar(1 + Math.max(0, Math.sin(now * 0.012)) * 0.25)
+    }
+    if (gloomMarks.current) {
+      gloomMarks.current.visible = gloomy
+      gloomMarks.current.position.y = Math.sin(now * 0.003) * 0.006
+    }
+    if (!skin.current && visual.current) {
+      visual.current.traverse((o) => {
+        const material = (o as Mesh).material as MeshStandardMaterial | undefined
+        if (!skin.current && material?.vertexColors) skin.current = material
+      })
+    }
+    if (skin.current) {
+      const want = angry ? 0.32 : pale ? 0.28 : blushing ? 0.1 : 0
+      tint.current += (want - tint.current) * Math.min(1, delta * 4)
+      skin.current.emissive.copy(angry ? FLUSH : pale ? PALE : FLUSH)
+      skin.current.emissiveIntensity = tint.current
+    }
+
     // Eyes go wide with shock or fear, droop when sulking, and close for a blink.
     eyeMeshes.current.forEach((mesh) => {
       if (!mesh) return
@@ -652,6 +745,8 @@ export default function Fruit({ id }: { id: string }) {
         }
       } else {
         foot.t = Math.min(1, foot.t + (delta / STEP_TIME) * stride)
+        // A running foot lands in a little puff of dust.
+        if (foot.t >= 1 && v.vel.length() > RUN_DUST * useSim.getState().speed) puff(foot.to.x, foot.to.z, 0.35)
         foot.pos.lerpVectors(foot.from, foot.to, foot.t)
         foot.pos.y = FOOT_Y + Math.sin(foot.t * Math.PI) * STEP_LIFT
       }
@@ -687,6 +782,48 @@ export default function Fruit({ id }: { id: string }) {
               ))}
             </group>
           ))}
+
+          {/* Mood marks, drawn flat on the skin. */}
+          <group ref={blushMarks} visible={false}>
+            {[-1, 1].map((side) => (
+              <group key={side} {...onSkin(kind, face, side * 0.17, -0.03)}>
+                {[-1, 0, 1].map((n) => (
+                  <mesh key={n} position={[n * 0.04, 0, 0]} rotation={[0, 0, 0.5]}>
+                    <planeGeometry args={[0.022, 0.09]} />
+                    <meshBasicMaterial color={BLUSH_COLOR} side={DoubleSide} />
+                  </mesh>
+                ))}
+              </group>
+            ))}
+          </group>
+          <group {...onSkin(kind, face, 0.2, 0.27)}>
+            <group ref={veinMark} visible={false}>
+              {/* Four little arcs bowing in toward each other: the cartoon popping vein. */}
+              {(
+                [
+                  [1, 1, Math.PI],
+                  [-1, 1, Math.PI * 1.5],
+                  [-1, -1, 0],
+                  [1, -1, Math.PI / 2],
+                ] as const
+              ).map(([x, y, start]) => (
+                <mesh key={start} position={[x * 0.065, y * 0.065, 0]}>
+                  <ringGeometry args={[0.04, 0.065, 12, 1, start, Math.PI / 2]} />
+                  <meshBasicMaterial color={VEIN_COLOR} side={DoubleSide} />
+                </mesh>
+              ))}
+            </group>
+          </group>
+          <group ref={gloomMarks} visible={false}>
+            {[-0.16, -0.08, 0, 0.08, 0.16].map((x, i) => (
+              <group key={x} {...onSkin(kind, face, x, 0.26)}>
+                <mesh position={[0, -0.04 - (i % 2) * 0.02, 0]}>
+                  <planeGeometry args={[0.024, 0.17 + (i % 2) * 0.05]} />
+                  <meshBasicMaterial color={GLOOM_COLOR} side={DoubleSide} />
+                </mesh>
+              </group>
+            ))}
+          </group>
 
           {/* A sticking plaster on the brow of a fruit that survived the knife. */}
           {bandaged && (
@@ -744,6 +881,24 @@ export default function Fruit({ id }: { id: string }) {
           <boxGeometry args={[0.02, 0.4, 0.11]} />
           <meshStandardMaterial color="#eef2f5" emissive="#aeb8c2" emissiveIntensity={0.7} roughness={0.3} />
         </mesh>
+      </group>
+
+      {/* Speed lines behind the wolf. Each is a thin stick, stretched along its length each frame. */}
+      <group ref={streaks} visible={false}>
+        {(
+          [
+            [-0.32, 0.18],
+            [0.3, 0.05],
+            [-0.12, -0.2],
+            [0.18, 0.32],
+            [0.02, -0.02],
+          ] as const
+        ).map(([x, y]) => (
+          <mesh key={x} position={[x, y, -1]}>
+            <boxGeometry args={[0.035, 0.035, 1]} />
+            <meshBasicMaterial color="#f4f6ff" transparent opacity={0.6} depthWrite={false} />
+          </mesh>
+        ))}
       </group>
 
       {/* The doctor's protection: a see-through bubble. */}
@@ -818,7 +973,7 @@ export default function Fruit({ id }: { id: string }) {
               {shielded && <span className="guard" title="Protected by the doctor tonight" />}
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
-              {reaction && <Emote reaction={reaction} big={dramatic} />}
+              {reaction && reaction !== 'blush' && <Emote reaction={reaction} big={dramatic} />}
             </div>
           </div>
         </Html>
