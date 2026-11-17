@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
+import BubbleLayout from './components/BubbleLayout'
 import Stage from './components/Stage'
 import Fruit from './components/Fruit'
 import Ghost from './components/Ghost'
@@ -29,6 +30,7 @@ export default function App() {
         </Suspense>
         <OrbitControls target={[0, 1, 0]} maxPolarAngle={Math.PI / 2.15} minDistance={6} maxDistance={55} enablePan={false} />
       </Canvas>
+      <BubbleLayout />
       {screen === 'setup' ? <SetupPanel /> : <Hud />}
     </>
   )

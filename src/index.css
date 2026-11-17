@@ -648,6 +648,12 @@ button.roster-row.on {
   opacity: 0.6;
 }
 
+/* A ghost's thought: nobody alive heard it. */
+.log .ghost {
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .log .vote {
   padding-left: 8px;
   border-left: 4px solid var(--apple);
@@ -950,6 +956,18 @@ button.roster-row.on {
   border: solid var(--ink);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg);
+}
+
+/* A bubble lifted clear of another one stays joined to its fruit by a line. */
+.fruit-tag .bubble::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2.5px;
+  margin-left: -1px;
+  height: var(--lift, 0px);
+  background: var(--ink);
 }
 
 /* Private thought: a dashed cloud with trailing dots instead of a tail. */
