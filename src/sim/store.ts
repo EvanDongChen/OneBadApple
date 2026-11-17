@@ -181,6 +181,10 @@ export interface SimState {
   sceneReady: boolean
   /** When the opening's descent out of the sky began, or null if it has not yet. */
   introAt: number | null
+  /** Draw arrows on the ground from each fruit to the ones it suspects. */
+  arrows: boolean
+  /** The fruit picked in the suspicion map, so the arrows on the ground show the same thing. */
+  arrowPick: string | null
   /** Let the camera follow the action by itself. */
   director: boolean
   /** Show every fruit's private thought floating over its head. */
@@ -237,6 +241,8 @@ export const useSim = create<SimState>((set, get) => ({
   screen: 'title',
   sceneReady: false,
   introAt: null,
+  arrows: true,
+  arrowPick: null,
   director: true,
   log: [],
   recap: [],

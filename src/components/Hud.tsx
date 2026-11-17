@@ -33,6 +33,7 @@ export default function Hud() {
   const revealRoles = useSim((s) => s.revealRoles)
   const showThoughts = useSim((s) => s.showThoughts)
   const director = useSim((s) => s.director)
+  const arrows = useSim((s) => s.arrows)
   const winner = useSim((s) => s.winner)
   const calls = useSim((s) => s.calls)
   const settings = useSim((s) => s.settings)
@@ -75,6 +76,9 @@ export default function Hud() {
           </button>
           <button className={mapOpen ? 'on' : ''} title="A diagram of who suspects whom. Spoilers!" onClick={() => setMapOpen(!mapOpen)}>
             {mapOpen ? 'Hide map' : 'Suspicion map'}
+          </button>
+          <button className={arrows ? 'on' : ''} title="Arrows on the ground from each fruit to the ones it suspects" onClick={() => useSim.setState({ arrows: !arrows })}>
+            {arrows ? 'Arrows on' : 'Arrows off'}
           </button>
           <button className={showThoughts ? 'on' : ''} onClick={() => useSim.setState({ showThoughts: !showThoughts })}>
             {showThoughts ? 'Hide thoughts' : 'Show thoughts'}

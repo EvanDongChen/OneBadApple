@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSim } from '../sim/store'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
 import RichText from './RichText'
@@ -29,6 +29,12 @@ export default function RelationshipMap({ onClose }: { onClose(): void }) {
 
   const living = fruits.filter((f) => f.alive)
   const pick = living.some((f) => f.id === picked) ? picked : null
+
+  // The arrows on the ground of the 3D world follow whatever is picked here.
+  useEffect(() => {
+    useSim.setState({ arrowPick: pick })
+    return () => useSim.setState({ arrowPick: null })
+  }, [pick])
   const spot = new Map(
     fruits.map((f, i) => {
       const angle = (i / fruits.length) * Math.PI * 2 - Math.PI / 2
