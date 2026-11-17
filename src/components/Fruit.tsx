@@ -5,7 +5,7 @@ import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapi
 import type { RapierRigidBody } from '@react-three/rapier'
 import { DoubleSide, Group, Mesh, Quaternion, Vector3 } from 'three'
 import { PARTY_BEAT_MS } from '../sim/sfx'
-import { fruitPositions, fruitSpeeds, useSim } from '../sim/store'
+import { fruitPositions, fruitSpeeds, ghostPositions, useSim } from '../sim/store'
 import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
@@ -392,7 +392,7 @@ export default function Fruit({ id }: { id: string }) {
           }
         }
       }
-      const focus = followPos ?? (lookId ? fruitPositions.get(lookId) : undefined)
+      const focus = followPos ?? (lookId ? (lookId.startsWith('ghost:') ? ghostPositions.get(lookId.slice(6)) : fruitPositions.get(lookId)) : undefined)
       v.tmp.set((focus?.x ?? 0) - t.x, 0, (focus?.z ?? 0) - t.z)
     }
     // Dance party: hop on every beat, rock from side to side, and spin on the spot.
@@ -473,6 +473,8 @@ export default function Fruit({ id }: { id: string }) {
       else if (mood === 'sulk') shape = FROWN
       else if (mood === 'shake') shape = Math.floor(performance.now() / 70) % 2
       else if (mood === 'puzzle') shape = 1
+      // A grieving fruit's mouth stays turned down.
+      else if (alive && !dancing && fruit.mood.grief > 0.5) shape = FROWN
     }
     // The face has a life of its own: it blinks, steals glances at whoever it trusts least,
     // and a werewolf lets a smirk slip now and then when it thinks nobody is looking.
@@ -526,7 +528,12 @@ export default function Fruit({ id }: { id: string }) {
             ? 'raised'
             : smirking
               ? 'smirk'
-              : null
+              : // No reaction going on: whatever it has been feeling since yesterday shows instead.
+                calm && fruit.mood.anger > 0.5
+                ? 'angry'
+                : calm && (fruit.mood.fear > 0.5 || fruit.mood.guilt > 0.5 || fruit.mood.grief > 0.5)
+                  ? 'worried'
+                  : null
     browMeshes.current.forEach((mesh, i) => {
       if (!mesh) return
       const side = i === 0 ? -1 : 1

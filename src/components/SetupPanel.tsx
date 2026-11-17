@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { startGame } from '../sim/engine'
 import { listGeminiModels } from '../sim/geminiBrain'
 import { unlockAudio } from '../sim/sfx'
+import { TEMPERS } from '../sim/mind'
 import { MAX_QUIRKS, presetOf, QUIRK_PRESETS, quirkLabel, quirkText } from '../sim/quirks'
 import { MAX_FRUITS, MIN_FRUITS, maxWolves, useSim } from '../sim/store'
 import { FRUIT_KINDS, TRAIT_KEYS } from '../sim/types'
-import type { FruitKind } from '../sim/types'
+import type { FruitKind, Temper } from '../sim/types'
 import { LOOKS } from './fruitLooks'
 
 const TRAIT_LABELS: Record<(typeof TRAIT_KEYS)[number], string> = {
@@ -356,6 +357,16 @@ export default function SetupPanel() {
                       <span className="num">{Math.round(fruit.traits[key] * 10)}</span>
                     </label>
                   ))}
+                  <label>
+                    How it changes its mind
+                    <select value={fruit.traits.temper} onChange={(e) => updateFruit(fruit.id, { traits: { temper: e.target.value as Temper } })}>
+                      {(Object.keys(TEMPERS) as Temper[]).map((temper) => (
+                        <option key={temper} value={temper}>
+                          {TEMPERS[temper].label}: {TEMPERS[temper].text}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label>
                     Backstory, in its own words
                     <input

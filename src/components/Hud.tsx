@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { startGame, stopGame } from '../sim/engine'
+import { describe, describeGoal, MOODS, suspectedBy, TEMPERS } from '../sim/mind'
 import { useSim } from '../sim/store'
 import type { Phase } from '../sim/types'
 import { LOOKS, ROLE_TAG } from './fruitLooks'
@@ -16,6 +17,8 @@ const PHASE_LABEL: Record<Phase, string> = {
 }
 
 const SPEEDS = [1, 2, 4]
+
+const MOOD_LABEL: Record<(typeof MOODS)[number], string> = { fear: 'Afraid', anger: 'Angry', grief: 'Grieving', guilt: 'Guilty', smug: 'Smug' }
 
 /** In-game overlay: the hanging sign with controls, the villager list, the gossip log and the end card. */
 export default function Hud() {
@@ -42,6 +45,14 @@ export default function Hud() {
     logEnd.current?.scrollIntoView({ block: 'end' })
   }, [log.length])
 
+  const nameOf = (id: string) => fruits.find((f) => f.id === id)?.name ?? 'someone'
+  const mindIsWolf = mind?.role === 'werewolf'
+  // Who it thinks suspects it: its own read of the others, not what they really believe.
+  const threats = mind
+    ? Object.entries(suspectedBy(mind))
+        .filter(([id, n]) => n >= 30 && fruits.find((f) => f.id === id)?.alive)
+        .map(([id]) => nameOf(id))
+    : []
   const voteCount = (id: string) => Object.values(votes).filter((v) => v === id).length
 
   return (
@@ -94,22 +105,55 @@ export default function Hud() {
             </div>
             <p className="thought">{mind.thought ? <RichText text={mind.thought} /> : 'Nothing on its mind yet.'}</p>
             {mind.traits.backstory && <p className="hint">"{mind.traits.backstory}"</p>}
+            <p className="hint">
+              <b>{TEMPERS[mind.traits.temper].label}.</b> Wants: <RichText text={describeGoal(mind.goal, nameOf, mindIsWolf)} />
+            </p>
+            {MOODS.some((m) => mind.mood[m] > 0.15) && (
+              <div className="moods">
+                {MOODS.filter((m) => mind.mood[m] > 0.15).map((m) => (
+                  <span key={m} className={`mood ${m}`} style={{ '--level': mind.mood[m] } as React.CSSProperties} title={`${Math.round(mind.mood[m] * 10)} out of 10`}>
+                    {MOOD_LABEL[m]}
+                  </span>
+                ))}
+              </div>
+            )}
+            <h3>{mindIsWolf ? 'How dangerous it thinks each fruit is' : 'How sure it is that each one is a wolf'}</h3>
             {fruits
-              .filter((o) => o.id !== mind.id && mind.feelings[o.id])
+              .filter((o) => o.id !== mind.id && o.alive && o.id in mind.beliefs && !(mindIsWolf && o.role === 'werewolf'))
+              .sort((a, b) => mind.beliefs[b.id] - mind.beliefs[a.id])
               .map((o) => {
-                const feel = mind.feelings[o.id]
+                const belief = Math.round(mind.beliefs[o.id])
                 return (
-                  <div key={o.id} className={`feeling${o.alive ? '' : ' dead'}`}>
+                  <div key={o.id} className="feeling">
                     <span className="who">
                       <RichText text={o.name} />
                     </span>
-                    <span className="meter" title={`Trust ${feel.trust}`}>
-                      <i className={feel.trust < 0 ? 'bad' : 'good'} style={{ width: `${Math.abs(feel.trust) * 10}%`, [feel.trust < 0 ? 'right' : 'left']: '50%' }} />
+                    <span className="meter one">
+                      <i className={belief >= 50 ? 'bad' : 'good'} style={{ width: `${belief}%` }} />
                     </span>
-                    <span className="note">{feel.note}</span>
+                    <span className="pct">{belief}%</span>
+                    <span className="note">{mind.feelings[o.id]?.note}</span>
                   </div>
                 )
               })}
+            {threats.length > 0 && (
+              <p className="hint">
+                Thinks these suspect it: <RichText text={threats.join(', ')} />
+              </p>
+            )}
+            {mind.events.length > 0 && (
+              <>
+                <h3>Remembers</h3>
+                {mind.events
+                  .slice(-5)
+                  .reverse()
+                  .map((e, i) => (
+                    <p key={i} className="memory">
+                      <RichText text={describe(e, mind, nameOf)} />
+                    </p>
+                  ))}
+              </>
+            )}
           </div>
         )}
         {settings.brain === 'gemini' && (

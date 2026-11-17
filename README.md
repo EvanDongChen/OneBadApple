@@ -32,7 +32,9 @@ Nobody plays. You just watch it go wrong.
 | 🎭 **Personalities** | Every fruit has four sliders (aggression, honesty, talkativeness, suspicion) and up to three quirks. Drag quirks like *Dramatic*, *Sassy* or *Pirate* onto a villager, or write your own. Quirks change how a fruit behaves as well as how it talks, and every fruit has a one-line backstory it likes to bring up. |
 | 🐺 **Roles** | Werewolves and villagers, plus an optional seer, doctor, hunter and jester. You choose how many wolves and which roles are in play. |
 | 🤫 **Private conversations** | Fruits pair off and talk at the same time. Only the fruits in a conversation hear it, so rumours spread by word of mouth and get passed on wrongly. |
-| 💭 **Minds you can read** | Each fruit keeps a private thought and a trust score for every other fruit. Open one in the side panel, or float every thought over its owner's head. |
+| 💭 **Minds you can read** | Each fruit keeps a private thought and a running estimate, in percent, of how likely every other fruit is to be a wolf. Open one in the side panel to watch the numbers move, or float every thought over its owner's head. |
+| 🧩 **Inner lives** | Fruits remember specific events and quote them back ("You voted for Pip on day 1, and Pip was innocent"). Each has a personal goal that can outweigh its side winning, a way of changing its mind (steady, stubborn, gullible or contrarian), and moods that build up and fade: fear, anger, grief, guilt and smugness. They work out who suspects them and look for allies before the vote. |
+| 🤥 **Lies that can unravel** | A werewolf's stories about each night are tracked. A careful one keeps them straight; a careless one contradicts itself, and a sharp fruit that heard both versions says so. |
 | 🔪 **Fruit physics** | Wobbly walking, floppy arms, stepping legs, and victims that fall apart into slices shaped like the fruit they were. |
 | 😱 **Body language** | Fruits gasp and jump back at a death, shake when they are accused, cheer when a wolf is caught and sulk when they got it wrong, each with a comic mark beside its name. They turn to watch whoever is accused or hurries past. |
 | 👀 **Faces** | Fruits blink, raise or knit their eyebrows, and steal glances at whoever they trust least. A werewolf lets a smirk slip now and then. |
@@ -177,7 +179,8 @@ src/
 ├── sim/                    the game, with no 3D in it
 │   ├── engine.ts           game loop: deals roles, runs each night and day, checks for a winner
 │   ├── geminiBrain.ts      builds prompts, calls Gemini, repairs anything illegal in the reply
-│   ├── mockBrain.ts        the No AI brain: personality-driven decisions
+│   ├── mind.ts             each fruit's memory, beliefs, moods and goal, shared by both brains
+│   ├── mockBrain.ts        the No AI brain: decisions made from each fruit's mind and personality
 │   ├── dialog.ts           stock lines for the No AI brain
 │   ├── quirks.ts           the ready-made personality quirks
 │   ├── store.ts            shared game state and saved settings
