@@ -1,9 +1,9 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { MathUtils, Vector3 } from 'three'
 import type { Group, Material, Mesh } from 'three'
-import { fruitPositions, useSim } from '../sim/store'
+import { fruitPositions, ghostPositions, useSim } from '../sim/store'
 import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, LIMB_COLOR } from './fruitShapes'
@@ -29,6 +29,14 @@ export default function Ghost({ id }: { id: string }) {
   const phase = useRef(Math.random() * Math.PI * 2)
   const kind = fruit?.kind ?? 'apple'
   const face = useMemo(() => anchors(kind), [kind])
+
+  // Let the living know where this ghost is, so a guilty fruit can turn and speak to it.
+  useEffect(() => {
+    ghostPositions.set(id, new Vector3())
+    return () => {
+      ghostPositions.delete(id)
+    }
+  }, [id])
 
   // Make every part of the body see-through.
   useLayoutEffect(() => {
@@ -71,6 +79,7 @@ export default function Ghost({ id }: { id: string }) {
     // Always watching the middle of the stage.
     g.rotation.set(reaction === 'sulk' ? 0.35 : 0, Math.atan2(-pos.x, -pos.z), Math.sin(age * 1.1 + phase.current) * 0.1)
     g.scale.setScalar(rise)
+    ghostPositions.get(id)?.copy(g.position)
 
     const shape = reaction === 'cheer' ? 1 : reaction === 'sulk' ? 2 : reaction === 'gasp' ? 3 : 0
     mouths.current.forEach((mesh, i) => {
@@ -109,10 +118,10 @@ export default function Ghost({ id }: { id: string }) {
               <RichText text={thought} />
             </div>
           )}
-          {reaction && <Emote reaction={reaction} />}
           <div className="name">
             {fruit.name}
             <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>
+            {reaction && <Emote reaction={reaction} />}
           </div>
         </div>
       </Html>

@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Grid } from '@react-three/drei'
+import { Grid, Html } from '@react-three/drei'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
-import { Color, DoubleSide, MathUtils, Object3D } from 'three'
+import { Color, DoubleSide, MathUtils, Object3D, Vector3 } from 'three'
 import type { AmbientLight, DirectionalLight, InstancedMesh } from 'three'
 import { ears } from '../sim/sfx'
 import { useSim } from '../sim/store'
@@ -18,16 +18,20 @@ const NIGHT = new Color('#1b1f2b')
  */
 export default function Stage() {
   const fruits = useSim((s) => s.fruits)
+  const splats = useSim((s) => s.splats)
+  const bursts = useSim((s) => s.bursts)
   const scene = useThree((s) => s.scene)
   const sun = useRef<DirectionalLight>(null)
   const ambient = useRef<AmbientLight>(null)
   const night = useRef(0)
   const backdrop = useRef(new Color('#ffffff'))
+  const cameraRight = useRef(new Vector3())
 
   useFrame(({ camera }, delta) => {
     // Voices are mixed by how close each speaker is to the camera.
-    ears.position.copy(camera.position)
-    ears.right.setFromMatrixColumn(camera.matrixWorld, 0)
+    const right = cameraRight.current.setFromMatrixColumn(camera.matrixWorld, 0)
+    ears.position = { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+    ears.right = { x: right.x, y: right.y, z: right.z }
     const phase = useSim.getState().phase
     night.current = MathUtils.damp(night.current, phase === 'night' ? 1 : phase === 'dawn' ? 0.4 : 0, 2, delta)
     scene.background = backdrop.current.lerpColors(DAY, NIGHT, night.current)
@@ -74,6 +78,32 @@ export default function Stage() {
       />
 
       <Confetti />
+
+      {/* Juice where a fruit was chopped or shot: one big blot and a scatter of drops. */}
+      {splats.map((splat, i) => (
+        <group key={i} position={[splat.x, 0.012 + i * 0.0005, splat.z]} rotation={[-Math.PI / 2, 0, splat.seed]}>
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => {
+            // Drop 0 is the blot; the rest are flung out around it at fixed pseudo-random spots.
+            const angle = n * 2.4 + splat.seed
+            const reach = n ? splat.size * (0.45 + ((n * 37 + splat.seed) % 5) * 0.09) : 0
+            return (
+              <mesh key={n} position={[Math.cos(angle) * reach, Math.sin(angle) * reach, 0]} scale={n ? [1, 0.75, 1] : [1.25, 1, 1]}>
+                <circleGeometry args={[n ? splat.size * (0.07 + (n % 3) * 0.035) : splat.size * 0.42, 18]} />
+                <meshBasicMaterial color={LOOKS[splat.kind].color} transparent opacity={0.6} />
+              </mesh>
+            )
+          })}
+        </group>
+      ))}
+
+      {/* Comic sound words. */}
+      {bursts.map((b) => (
+        <Html key={b.key} center position={b.at} zIndexRange={[40, 30]}>
+          <div className="burst" style={{ '--tilt': `${((b.key * 53) % 24) - 12}deg` } as React.CSSProperties}>
+            {b.text}
+          </div>
+        </Html>
+      ))}
 
       {/* Meeting circle. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>

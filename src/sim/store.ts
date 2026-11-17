@@ -1,8 +1,10 @@
 import { create } from 'zustand'
-import { Vector3 } from 'three'
+import type { Vector3 } from 'three'
+import { BACKSTORIES } from './dialog'
+import { emptyMood } from './mind'
 import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
-import type { FruitDef, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
+import type { FruitDef, FruitKind, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
 
 export const MIN_FRUITS = 4
 export const MAX_FRUITS = 10
@@ -71,6 +73,9 @@ function randomTraits(): Traits {
     talkativeness: r(),
     suspicion: r(),
     quirks: presets.slice(0, Math.random() < 0.3 ? 2 : 1).map((p) => p.id),
+    backstory: BACKSTORIES[Math.floor(Math.random() * BACKSTORIES.length)],
+    // Most fruits are level-headed; the rest are split between the three awkward kinds.
+    temper: Math.random() < 0.4 ? 'steady' : pick(['stubborn', 'gullible', 'contrarian'] as const),
   }
 }
 
@@ -116,6 +121,10 @@ export function layout(roster: FruitDef[]): FruitState[] {
     heard: [],
     thought: '',
     feelings: {},
+    events: [],
+    beliefs: {},
+    mood: emptyMood(),
+    goal: { kind: 'truth' },
   }))
 }
 
@@ -124,7 +133,7 @@ function seats(fruits: FruitState[]): Record<string, [number, number]> {
 }
 
 export interface SimState {
-  screen: 'setup' | 'game'
+  screen: 'title' | 'setup' | 'game'
   roster: FruitDef[]
   fruits: FruitState[]
   phase: Phase
@@ -146,6 +155,14 @@ export interface SimState {
   party: { at: number; dancers: string[] } | null
   /** The vote being carried out: one voter draws a gun on the condemned fruit, and `firing` is the shot. */
   execution: { shooterId: string; targetId: string; firing: boolean } | null
+  /** The doctor's protection for the night: a bubble around one fruit. `hit` is the knife bouncing off it. */
+  shield: { id: string; hit: boolean } | null
+  /** Fruits that survived an attack and wear a plaster for the rest of the game. */
+  bandaged: Record<string, boolean | undefined>
+  /** Juice left on the floor where a fruit was chopped or shot. */
+  splats: { x: number; z: number; kind: FruitKind; size: number; seed: number }[]
+  /** Comic sound words ("CHOP!") bursting over the stage right now. */
+  bursts: { key: number; text: string; at: [number, number, number] }[]
   /** What each ghost is thinking right now, shown over its head. */
   ghostThoughts: Record<string, string | undefined>
   /** Body language each fruit is showing right now. */
@@ -160,6 +177,16 @@ export interface SimState {
   paused: boolean
   speed: number
   revealRoles: boolean
+  /** The 3D scene has loaded and is drawing. */
+  sceneReady: boolean
+  /** When the opening's descent out of the sky began, or null if it has not yet. */
+  introAt: number | null
+  /** Draw arrows on the ground from each fruit to the ones it suspects. */
+  arrows: boolean
+  /** The fruit picked in the suspicion map, so the arrows on the ground show the same thing. */
+  arrowPick: string | null
+  /** Let the camera follow the action by itself. */
+  director: boolean
   /** Show every fruit's private thought floating over its head. */
   showThoughts: boolean
   calls: number
@@ -173,6 +200,8 @@ export interface SimState {
   setRules(patch: Partial<Rules>): void
   addLog(entry: LogEntry): void
   backToSetup(): void
+  /** Leave the title screen: the fruits stop wandering and take their places. */
+  enterSetup(): void
 }
 
 const initialRoster = makeRoster(6)
@@ -194,6 +223,10 @@ function setupState(roster: FruitDef[]) {
     attack: null,
     party: null,
     execution: null,
+    shield: null,
+    bandaged: {},
+    splats: [],
+    bursts: [],
     ghostThoughts: {},
     reactions: {},
     chopped: {},
@@ -205,6 +238,12 @@ function setupState(roster: FruitDef[]) {
 
 export const useSim = create<SimState>((set, get) => ({
   ...setupState(initialRoster),
+  screen: 'title',
+  sceneReady: false,
+  introAt: null,
+  arrows: true,
+  arrowPick: null,
+  director: true,
   log: [],
   recap: [],
   speed: 1,
@@ -236,7 +275,14 @@ export const useSim = create<SimState>((set, get) => ({
   setRules: (patch) => get().setSettings({ rules: { ...get().settings.rules, ...patch } }),
   addLog: (entry) => set((s) => ({ log: [...s.log, entry].slice(-300) })),
   backToSetup: () => set((s) => ({ ...setupState(s.roster), revealRoles: false })),
+  enterSetup: () => set((s) => ({ screen: 'setup', targets: seats(s.fruits) })),
 }))
+
+/** Where each ghost is floating, so the living can turn to face one. */
+export const ghostPositions = new Map<string, Vector3>()
+
+/** How fast each fruit is moving along the ground right now. Lets fruits notice someone hurrying past. */
+export const fruitSpeeds = new Map<string, number>()
 
 /** Live world positions, written by each Fruit every frame. Kept out of React state. */
 export const fruitPositions = new Map<string, Vector3>()
