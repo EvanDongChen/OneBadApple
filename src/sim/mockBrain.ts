@@ -71,6 +71,23 @@ export class MockBrain implements Brain {
     )
   }
 
+  /** Does this fruit have one of these preset quirks? */
+  private is(fruit: FruitState, ...quirks: string[]) {
+    return quirks.some((q) => fruit.traits.quirks.includes(q))
+  }
+
+  /** Whether the fruit goes for the harsh version of a line. Quirks push this up or down. */
+  private harsh(fruit: FruitState) {
+    const push = (this.is(fruit, 'sassy', 'grumpy') ? 0.3 : 0) + (this.is(fruit, 'royal') ? 0.15 : 0) - (this.is(fruit, 'polite', 'cheerful') ? 0.35 : 0)
+    return Math.random() < fruit.traits.aggression + push
+  }
+
+  /** Idle chat: a stock pleasantry, or now and then the fruit's own backstory. */
+  private smallTalk(fruit: FruitState, pool: string[]): string {
+    const { backstory } = fruit.traits
+    return backstory && Math.random() < 0.3 ? this.line(D.BACKSTORY_TALK).replace('{b}', backstory) : this.line(pool)
+  }
+
   private isPackmate(view: AgentView, other: Other) {
     return view.self.role === 'werewolf' && view.self.memory.includes(`Fellow werewolf: ${other.name}`)
   }
@@ -106,9 +123,13 @@ export class MockBrain implements Brain {
     // Grudge: how often they have named me.
     const grudge = this.mentions(view, other.name, name)
     // Hunch: suspicious fruits invent reasons out of thin air.
-    const hunch = Math.random() * (0.5 + traits.suspicion * 3)
+    // A paranoid fruit sees more in nothing, and trusts everybody a little less.
+    const paranoid = this.is(view.self, 'paranoid')
+    const hunch = Math.random() * (0.5 + traits.suspicion * 3) * (paranoid ? 1.7 : 1) + (paranoid ? 0.8 : 0)
 
     let score = heat * (0.4 + traits.suspicion * 0.6) + grudge * (0.3 + traits.aggression * 2.5) + hunch
+    // A nervous fruit goes along with whoever everyone else is naming.
+    if (this.is(view.self, 'nervous')) score += heat * 0.8
     // A werewolf piles onto whoever is already under fire, and wants loud accusers gone.
     if (role === 'werewolf') score += heat * 0.8 + grudge * 1.5
     return score
@@ -143,21 +164,27 @@ export class MockBrain implements Brain {
         ? [this.line(D.CONFRONT, partner), { tone: 'accuse', about: partner.id }]
         : [this.line(D.ALLY), { tone: 'friendly' }]
     }
-    if (Math.random() < 0.35 + traits.suspicion * 0.6) return [this.line(D.GOSSIP, partner, suspect), { tone: 'accuse', about: suspect.id }]
+    // Gossips spread rumours at every chance; know-it-alls and detectives like to share a theory.
+    const chatty = (this.is(view.self, 'gossip') ? 0.4 : 0) + (this.is(view.self, 'know-it-all', 'detective') ? 0.2 : 0)
+    if (Math.random() < 0.35 + traits.suspicion * 0.6 + chatty) return [this.line(D.GOSSIP, partner, suspect), { tone: 'accuse', about: suspect.id }]
     if (view.lastDead && Math.random() < 0.3) return [this.line(D.MOURN, undefined, undefined, view.lastDead), { tone: 'friendly' }]
-    return [this.line(D.ALLY), { tone: 'friendly' }]
+    return [this.smallTalk(view.self, D.ALLY), { tone: 'friendly' }]
   }
 
   /** A reply inside a conversation, reacting to what `speaker` just said. */
   private reply(view: AgentView, speaker: Other, last: Said): [string, Said] {
     const { traits, role, id } = view.self
-    const harsh = Math.random() < traits.aggression
+    const harsh = this.harsh(view.self)
+    const accused = last.tone === 'accuse' && last.about === id
     const subject = view.others.find((o) => o.id === last.about)
     let out: [string, Said]
 
     if (role === 'jester' && Math.random() < 0.4) {
       out = [this.line(D.JESTER), { tone: 'friendly' }]
-    } else if (last.tone === 'accuse' && last.about === id) {
+    } else if (this.is(view.self, 'sleepy') && !accused && Math.random() < 0.35) {
+      // Too drowsy to follow the argument.
+      out = [this.smallTalk(view.self, D.SMALL_TALK), { tone: 'friendly' }]
+    } else if (accused) {
       // I was just accused to my face.
       out = [this.line(harsh ? D.DEFEND_HARSH : D.DEFEND_MILD, speaker), { tone: 'accuse', about: speaker.id }]
     } else if (last.tone === 'accuse' && subject) {
@@ -168,7 +195,7 @@ export class MockBrain implements Brain {
       } else if (this.knownWolf(view, subject) || subject.id === this.topSuspect(view).id || Math.random() < traits.suspicion * 0.5) {
         out = [this.line(D.AGREE, subject), { tone: 'accuse', about: subject.id }]
       } else out = [this.line(D.UNSURE, subject), { tone: 'friendly' }]
-    } else if (Math.random() < 0.3 + traits.suspicion * 0.5) {
+    } else if (Math.random() < 0.3 + traits.suspicion * 0.5 + (this.is(view.self, 'detective', 'know-it-all', 'paranoid') ? 0.25 : 0)) {
       // Nothing to react to: bring up its own suspicion.
       const suspect = this.topSuspect(view)
       out =
@@ -176,16 +203,18 @@ export class MockBrain implements Brain {
           ? [this.line(D.CONFRONT, speaker), { tone: 'accuse', about: speaker.id }]
           : [this.line(harsh ? D.ACCUSE_HARSH : D.ACCUSE_MILD, suspect), { tone: 'accuse', about: suspect.id }]
     } else {
-      out = [this.line(D.SMALL_TALK), { tone: 'friendly' }]
+      out = [this.smallTalk(view.self, D.SMALL_TALK), { tone: 'friendly' }]
     }
 
-    if (Math.random() < traits.talkativeness * 0.5) out[0] += ` ${this.line(D.EXTRA)}`
+    // Sleepy fruits rarely add anything; gossips and drama queens can't help themselves.
+    const more = traits.talkativeness * 0.5 * (this.is(view.self, 'sleepy') ? 0.3 : 1) + (this.is(view.self, 'gossip', 'dramatic') ? 0.2 : 0)
+    if (Math.random() < more) out[0] += ` ${this.line(D.EXTRA)}`
     return out
   }
 
   private vote(view: AgentView): { target: string; reason: string } {
     const target = this.topSuspect(view)
-    const harsh = Math.random() < view.self.traits.aggression
+    const harsh = this.harsh(view.self)
     const pool = this.knownWolf(view, target)
       ? D.VOTE_KNOWN
       : this.mentions(view, target.name, view.self.name) > 0 && harsh
@@ -321,7 +350,8 @@ export class MockBrain implements Brain {
       }
       const view = this.view(world, fruit, extra.get(fruit.id))
       // Aggressive fruits seek out their suspect; gentler ones seek out a friend.
-      const wanted = Math.random() < fruit.traits.aggression ? this.topSuspect(view) : this.mostTrusted(view)
+      // A detective always wants a word with its suspect.
+      const wanted = Math.random() < fruit.traits.aggression + (this.is(fruit, 'detective') ? 0.5 : 0) ? this.topSuspect(view) : this.mostTrusted(view)
       const open = living.filter((f) => free.has(f.id))
       const unmet = open.filter((f) => !met.has(key(fruit.id, f.id)))
       const partner = unmet.find((f) => f.id === wanted.id) ?? (unmet.length ? pick(unmet) : pick(open))

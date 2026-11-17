@@ -29,6 +29,8 @@ export interface Traits {
   suspicion: number
   /** Each is a preset's id (see quirks.ts) or, for one the user wrote, the text itself. */
   quirks: string[]
+  /** One line of history, in the fruit's own words, which it brings up in conversation. */
+  backstory: string
 }
 
 export const TRAIT_KEYS = ['aggression', 'honesty', 'talkativeness', 'suspicion'] as const

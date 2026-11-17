@@ -89,6 +89,7 @@ export default function Hud() {
               <span className={`role ${mind.role}`}>{ROLE_TAG[mind.role]}</span>
             </div>
             <p className="thought">{mind.thought ? <RichText text={mind.thought} /> : 'Nothing on its mind yet.'}</p>
+            {mind.traits.backstory && <p className="hint">"{mind.traits.backstory}"</p>}
             {fruits
               .filter((o) => o.id !== mind.id && mind.feelings[o.id])
               .map((o) => {

@@ -445,6 +445,9 @@ async function talkRound(groups: Conversation[], round: number, total: number, s
         // A fruit accused to its face shakes while it is being talked about.
         const accused = accusedBy(line, group.members)
         if (accused) react([accused], 'shake', 1500 + line.say.length * 40, signal)
+        // Nervous fruits rattle whenever anyone near them is accused, not only when it is them.
+        const nervous = group.members.filter((id) => id !== accused && id !== speaker.id && byId(id).traits.quirks.includes('nervous'))
+        if (accused || ACCUSING.test(line.say)) react(nervous, 'shake', 1200, signal)
         await say(speaker, line.say, { kind: 'say', to: listeners.map((id) => byId(id).name).join(' & ') }, signal)
       }
     }),

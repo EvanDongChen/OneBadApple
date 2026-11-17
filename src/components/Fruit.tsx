@@ -5,7 +5,7 @@ import { BallCollider, RigidBody, useBeforePhysicsStep } from '@react-three/rapi
 import type { RapierRigidBody } from '@react-three/rapier'
 import { DoubleSide, Group, Mesh, Quaternion, Vector3 } from 'three'
 import { PARTY_BEAT_MS } from '../sim/sfx'
-import { fruitPositions, useSim } from '../sim/store'
+import { fruitPositions, fruitSpeeds, useSim } from '../sim/store'
 import Emote from './Emote'
 import { ROLE_TAG } from './fruitLooks'
 import { anchors, EYE_SPREAD, FruitBody, FruitSlices, LIMB_COLOR, RADIUS } from './fruitShapes'
@@ -126,6 +126,11 @@ export default function Fruit({ id }: { id: string }) {
   const overlay = useRef<Group>(null)
   const mouthMeshes = useRef<(Mesh | null)[]>([])
   const eyeMeshes = useRef<(Mesh | null)[]>([])
+  const browMeshes = useRef<(Mesh | null)[]>([])
+  /** When this fruit next blinks, glances at its suspect, or (if it is a wolf) lets a smirk slip. */
+  const tics = useRef({ blinkAt: 0, blinkEnd: 0, glanceAt: 3000 + Math.random() * 5000, glanceEnd: 0, smirkAt: 6000 + Math.random() * 9000, smirkEnd: 0 })
+  /** Drama queens overreact: bigger jumps and bigger marks over their heads. */
+  const dramatic = fruit.traits.quirks.includes('dramatic')
   const mouthShape = useRef(0)
   const mouthTimer = useRef(0)
   const armMeshes = useRef<(Mesh | null)[]>([null, null, null, null])
@@ -187,7 +192,8 @@ export default function Fruit({ id }: { id: string }) {
       const m = b.mass()
       const r = b.rotation()
       v.tmp.set(0, 0, 1).applyQuaternion(v.quat.set(r.x, r.y, r.z, r.w))
-      b.applyImpulse({ x: -v.tmp.x * m * 1.8, y: m * 3.6, z: -v.tmp.z * m * 1.8 }, true)
+      const flinch = dramatic ? 1.6 : 1
+      b.applyImpulse({ x: -v.tmp.x * m * 1.8 * flinch, y: m * 3.6 * flinch, z: -v.tmp.z * m * 1.8 * flinch }, true)
       b.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.6, y: 0, z: (Math.random() - 0.5) * m * 0.6 }, true)
     }, Math.random() * 220)
     return () => clearTimeout(timer)
@@ -268,6 +274,8 @@ export default function Fruit({ id }: { id: string }) {
     const b = body.current
     if (!b) return
     const sim = useSim.getState()
+    const moving = b.linvel()
+    fruitSpeeds.set(id, Math.hypot(moving.x, moving.z))
     if (!sim.fruits.find((f) => f.id === id)?.alive) return // ragdoll: physics only
 
     const m = b.mass()
@@ -357,7 +365,33 @@ export default function Fruit({ id }: { id: string }) {
     if (walking) {
       v.tmp.copy(v.want)
     } else {
-      const lookId = sim.lookAt[id] ?? (sim.focusId !== id ? sim.focusId : null)
+      let lookId = sim.lookAt[id] ?? (sim.focusId !== id ? sim.focusId : null)
+      // Crowd reactions. A fruit being accused draws every eye nearby...
+      let nearest = 7
+      let drawn = false
+      for (const otherId in sim.reactions) {
+        if (otherId === id || sim.reactions[otherId] !== 'shake') continue
+        const p = fruitPositions.get(otherId)
+        const d = p ? Math.hypot(p.x - t.x, p.z - t.z) : Infinity
+        if (d < nearest) {
+          nearest = d
+          lookId = otherId
+          drawn = true
+        }
+      }
+      // ...and a fruit with nobody to talk to turns to watch anyone hurrying past.
+      if (!drawn && !sim.lookAt[id] && sim.phase !== 'vote') {
+        nearest = 4.5
+        for (const [otherId, speed] of fruitSpeeds) {
+          if (otherId === id || speed < 1.3) continue
+          const p = fruitPositions.get(otherId)
+          const d = p ? Math.hypot(p.x - t.x, p.z - t.z) : Infinity
+          if (d < nearest) {
+            nearest = d
+            lookId = otherId
+          }
+        }
+      }
       const focus = followPos ?? (lookId ? fruitPositions.get(lookId) : undefined)
       v.tmp.set((focus?.x ?? 0) - t.x, 0, (focus?.z ?? 0) - t.z)
     }
@@ -440,11 +474,68 @@ export default function Fruit({ id }: { id: string }) {
       else if (mood === 'shake') shape = Math.floor(performance.now() / 70) % 2
       else if (mood === 'puzzle') shape = 1
     }
-    // Eyes go wide with shock or fear and droop when sulking.
+    // The face has a life of its own: it blinks, steals glances at whoever it trusts least,
+    // and a werewolf lets a smirk slip now and then when it thinks nobody is looking.
+    const now = performance.now()
+    const tic = tics.current
+    if (now > tic.blinkAt) {
+      tic.blinkEnd = now + 110
+      tic.blinkAt = now + 1800 + Math.random() * 4200
+    }
+    if (now > tic.glanceAt) {
+      tic.glanceEnd = now + 750
+      tic.glanceAt = now + 3000 + Math.random() * 5000
+    }
+    if (now > tic.smirkAt) {
+      tic.smirkEnd = now + 700
+      tic.smirkAt = now + 7000 + Math.random() * 8000
+    }
+    const calm = alive && !mood && !dancing
+    const smirking = calm && !speechText && fruit.role === 'werewolf' && now < tic.smirkEnd
+    let glance = 0
+    if (calm && now < tic.glanceEnd) {
+      const fruits = useSim.getState().fruits
+      let suspect: string | undefined
+      let lowest = -1
+      for (const otherId in fruit.feelings) {
+        const trust = fruit.feelings[otherId].trust
+        if (trust < lowest && fruits.find((o) => o.id === otherId)?.alive) {
+          lowest = trust
+          suspect = otherId
+        }
+      }
+      const at = suspect ? fruitPositions.get(suspect) : undefined
+      // Which side of this fruit the suspect is standing on.
+      if (at) glance = Math.sign(v.tmp.set(1, 0, 0).applyQuaternion(v.quat).dot(v.hip.subVectors(at, v.pos)))
+    }
+    // Eyes go wide with shock or fear, droop when sulking, and close for a blink.
     eyeMeshes.current.forEach((mesh) => {
-      if (mood === 'sulk') mesh?.scale.set(1.1, 0.4, 1)
-      else mesh?.scale.setScalar(mood === 'gasp' ? 1.8 : mood === 'shake' ? 1.35 : 1)
+      if (!mesh) return
+      if (mood === 'sulk') mesh.scale.set(1.1, 0.4, 1)
+      else if (calm && now < tic.blinkEnd) mesh.scale.set(1.1, 0.12, 1)
+      else mesh.scale.setScalar(mood === 'gasp' ? 1.8 : mood === 'shake' ? 1.35 : 1)
+      mesh.position.x = glance * 0.026
     })
+    // Eyebrows only show when there is a feeling to show: a scowl, worry, surprise, or the smirk.
+    const brow =
+      alive && (armed || gunning || (pointAt && speechText))
+        ? 'angry'
+        : mood === 'shake' || mood === 'sulk'
+          ? 'worried'
+          : mood === 'gasp' || mood === 'cheer' || mood === 'puzzle'
+            ? 'raised'
+            : smirking
+              ? 'smirk'
+              : null
+    browMeshes.current.forEach((mesh, i) => {
+      if (!mesh) return
+      const side = i === 0 ? -1 : 1
+      mesh.visible = !!brow
+      mesh.rotation.z = brow === 'angry' ? side * 0.5 : brow === 'worried' ? -side * 0.4 : brow === 'smirk' ? (i === 1 ? -0.25 : 0.35) : 0
+      mesh.position.y = 0.078 + (brow === 'raised' || (brow === 'smirk' && i === 1) ? 0.03 : brow === 'angry' ? -0.012 : 0)
+    })
+    // The smirk: the resting mouth tips up at one end.
+    if (mouthMeshes.current[0]) mouthMeshes.current[0].rotation.z = smirking ? 0.38 : 0
     mouthShape.current = shape
     mouthMeshes.current.forEach((mesh, i) => {
       if (mesh) mesh.visible = i === shape
@@ -575,6 +666,10 @@ export default function Fruit({ id }: { id: string }) {
             <group key={side} position={[side * EYE_SPREAD, face.y + 0.08 + eyeOffsets[i], face.eyeZ * 0.985]}>
               <mesh visible={alive} ref={(m) => void (eyeMeshes.current[i] = m)}>
                 <sphereGeometry args={[EYE_RADIUS, 12, 12]} />
+                <meshBasicMaterial color={LIMB_COLOR} />
+              </mesh>
+              <mesh visible={false} ref={(m) => void (browMeshes.current[i] = m)} position={[0, 0.078, 0.014]}>
+                <planeGeometry args={[0.09, 0.02]} />
                 <meshBasicMaterial color={LIMB_COLOR} />
               </mesh>
               {[1, -1].map((tilt) => (
@@ -716,7 +811,7 @@ export default function Fruit({ id }: { id: string }) {
               {shielded && <span className="guard" title="Protected by the doctor tonight" />}
               {fruit.name}
               {showRole && <span className={`role ${fruit.role}`}>{ROLE_TAG[fruit.role]}</span>}
-              {reaction && <Emote reaction={reaction} />}
+              {reaction && <Emote reaction={reaction} big={dramatic} />}
             </div>
           </div>
         </Html>

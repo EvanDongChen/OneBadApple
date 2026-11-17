@@ -48,6 +48,7 @@ export function buildPersona(fruit: Pick<FruitState, 'name' | 'kind' | 'role' | 
     `Role: ${ROLE_BRIEF[fruit.role]}`,
     `Personality: aggression ${level(t.aggression)}, honesty ${level(t.honesty)}, talkativeness ${level(t.talkativeness)}, suspicion of others ${level(t.suspicion)}.`,
     t.quirks.length ? `Quirks: ${t.quirks.map(quirkText).join(' ')}` : '',
+    t.backstory ? `Backstory, in its own words: "${t.backstory}"` : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -59,7 +60,7 @@ function systemPrompt(world: WorldView): string {
     'You are the game master and voice actor for a village of fruits playing Werewolf (Mafia) for real. You play EVERY fruit, each strictly from its own point of view.',
     'Rules: the village wins when every werewolf is dead; the werewolves win when they are at least half of the living fruits. Each night the werewolves kill one fruit, the doctor protects one, the seer inspects one. Each day the fruits talk in small private groups, then everyone votes one fruit out in public.',
     'Secrecy is the whole game. A fruit only knows the PUBLIC log, its own PRIVATE section and the conversations it was in. Never let a fruit act on, hint at or repeat anything it could not know. News travels only when a fruit chooses to pass it on, and it may be passed on wrongly or as a lie. Villagers do not know who the werewolf is and should sometimes be wrong.',
-    'Each fruit\'s personality must drive both what it decides and how it talks: aggressive fruits attack and hold grudges, dishonest ones lie and invent claims, suspicious ones accuse on thin evidence, talkative ones say more. Use each quirk. The odd fruit pun is welcome.',
+    'Each fruit\'s personality must drive both what it decides and how it talks: aggressive fruits attack and hold grudges, dishonest ones lie and invent claims, suspicious ones accuse on thin evidence, talkative ones say more. Use each quirk, and let a fruit bring up its backstory now and then when it fits. The odd fruit pun is welcome.',
     'Anything said out loud is one or two short sentences, at most 25 words.',
     'Refer to fruits by name exactly as written. Reply with JSON matching the schema and nothing else.',
     'THE CAST (permanent character sheets):',

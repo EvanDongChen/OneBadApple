@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Vector3 } from 'three'
+import { BACKSTORIES } from './dialog'
 import { QUIRK_PRESETS } from './quirks'
 import { FRUIT_KINDS } from './types'
 import type { FruitDef, FruitKind, FruitState, LogEntry, Phase, Reaction, RecapEvent, Rules, Traits, Winner } from './types'
@@ -71,6 +72,7 @@ function randomTraits(): Traits {
     talkativeness: r(),
     suspicion: r(),
     quirks: presets.slice(0, Math.random() < 0.3 ? 2 : 1).map((p) => p.id),
+    backstory: BACKSTORIES[Math.floor(Math.random() * BACKSTORIES.length)],
   }
 }
 
@@ -249,6 +251,9 @@ export const useSim = create<SimState>((set, get) => ({
   addLog: (entry) => set((s) => ({ log: [...s.log, entry].slice(-300) })),
   backToSetup: () => set((s) => ({ ...setupState(s.roster), revealRoles: false })),
 }))
+
+/** How fast each fruit is moving along the ground right now. Lets fruits notice someone hurrying past. */
+export const fruitSpeeds = new Map<string, number>()
 
 /** Live world positions, written by each Fruit every frame. Kept out of React state. */
 export const fruitPositions = new Map<string, Vector3>()

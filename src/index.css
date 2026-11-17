@@ -1006,6 +1006,15 @@ button.roster-row.on {
   animation: pop 0.25s ease-out;
 }
 
+.emote.big {
+  font-size: 46px;
+}
+
+.emote.big .drop,
+.emote.big .dots i {
+  scale: 1.5;
+}
+
 .emote.gasp {
   color: var(--apple);
 }

@@ -356,6 +356,15 @@ export default function SetupPanel() {
                       <span className="num">{Math.round(fruit.traits[key] * 10)}</span>
                     </label>
                   ))}
+                  <label>
+                    Backstory, in its own words
+                    <input
+                      value={fruit.traits.backstory}
+                      maxLength={100}
+                      placeholder="I used to be in a pie. I got out."
+                      onChange={(e) => updateFruit(fruit.id, { traits: { backstory: e.target.value } })}
+                    />
+                  </label>
                   <button className="danger" onClick={() => removeFruit(fruit.id)} disabled={roster.length <= MIN_FRUITS}>
                     Remove {fruit.name}
                   </button>
